@@ -220,7 +220,6 @@ body {
   display: grid;
   grid-template-columns: 1fr 350px;
   gap: 24px;
-  height: 550px;
 }
 
 .map-card {
@@ -230,6 +229,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 600px;
 }
 
 .map-header {
