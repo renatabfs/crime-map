@@ -299,6 +299,7 @@ body {
 .chart-body {
   flex: 1;
   width: 100%;
+  min-height: 220px;
 }
 .recent-card {
   background-color: var(--panel-bg);
