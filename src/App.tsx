@@ -16,10 +16,8 @@ function App() {
   return (
     <div className="dashboard-layout">
       <Sidebar filters={filters} setFilters={setFilters} />
-
       <main className="main-content">
         <HeaderStats filters={filters} />
-
         <div className="content-grid">
           <MapView filters={filters} />
           <ChartsPanel filters={filters} />
