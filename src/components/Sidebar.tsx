@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Home,
   HelpCircle,
@@ -16,9 +16,15 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ filters, setFilters }: SidebarProps) {
+  const [localFilters, setLocalFilters] = useState(filters);
+
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFilters({ ...filters, [name]: value });
+    setLocalFilters({ ...localFilters, [name]: value });
+  };
+
+  const handleApply = () => {
+    setFilters(localFilters);
   };
 
   return (
@@ -48,7 +54,7 @@ export default function Sidebar({ filters, setFilters }: SidebarProps) {
           <label>
             <MapPin size={16} /> Cidade
           </label>
-          <select name="city" value={filters.city} onChange={handleChange}>
+          <select name="city" value={localFilters.city} onChange={handleChange}>
             <option value="Vitória da Conquista">Vitória da Conquista</option>
           </select>
         </div>
@@ -57,7 +63,7 @@ export default function Sidebar({ filters, setFilters }: SidebarProps) {
           <label>
             <Calendar size={16} /> Período
           </label>
-          <select name="period" value={filters.period} onChange={handleChange}>
+          <select name="period" value={localFilters.period} onChange={handleChange}>
             <option value="5-years">Últimos 5 anos</option>
             <option value="1-year">Último ano</option>
             <option value="6-months">Últimos 6 meses</option>
@@ -70,7 +76,7 @@ export default function Sidebar({ filters, setFilters }: SidebarProps) {
           </label>
           <select
             name="crimeType"
-            value={filters.crimeType}
+            value={localFilters.crimeType}
             onChange={handleChange}
           >
             <option value="all">Todos os tipos</option>
@@ -81,7 +87,7 @@ export default function Sidebar({ filters, setFilters }: SidebarProps) {
           </select>
         </div>
 
-        <button className="apply-btn">
+        <button className="apply-btn" onClick={handleApply}>
           <SlidersHorizontal size={18} /> Aplicar Filtros
         </button>
       </div>

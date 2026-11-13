@@ -6,22 +6,68 @@ interface ChartsPanelProps {
 }
 
 export default function ChartsPanel({ filters }: ChartsPanelProps) {
+
+    const periodMultiplier =
+        filters.period === '1-year' ? 0.24 : filters.period === '6-months' ? 0.11 : 1;
+
+    const typeMultipliers: Record<string, number> = {
+        all: 1,
+        Furto: 0.33,
+        Roubo: 0.26,
+        'Lesão Corporal': 0.18,
+        Homicídio: 0.12,
+    };
+
+    const typeMultiplier = typeMultipliers[filters.crimeType] ?? 1;
+    const factor = periodMultiplier * typeMultiplier;
+
+    const basePieData = [
+        { name: 'Furto', filterKey: 'Furto', value: 32.7, color: '#e12c2c' },
+        { name: 'Roubo', filterKey: 'Roubo', value: 26.1, color: '#ff4d4d' },
+        { name: 'Lesão', filterKey: 'Lesão Corporal', value: 18.4, color: '#ff7979' },
+        { name: 'Homicídio', filterKey: 'Homicídio', value: 12.3, color: '#ffb3b3' },
+        { name: 'Outros', filterKey: 'Outros', value: 10.5, color: '#ffe6e6' },
+    ];
+
     const pieData = [
-        { name: 'Furto', value: 32.7, color: '#e12c2c' },
-        { name: 'Roubo', value: 26.1, color: '#ff4d4d' },
-        { name: 'Lesão', value: 18.4, color: '#ff7979' },
-        { name: 'Homicídio', value: 12.3, color: '#ffb3b3' },
-        { name: 'Outros', value: 10.5, color: '#ffe6e6' },
+        filters.crimeType === 'all'
+            ? basePieData
+            : basePieData.map((item) => ({
+                ...item,
+                color: item.filterKey === filters.crimeType ? '#e12c2c' : '#2a2d37',
+            }))
     ];
 
-    const lineData = [
-        { year: '2019', crimes: 2100 },
-        { year: '2020', crimes: 3000 },
-        { year: '2021', crimes: 4200 },
-        { year: '2022', crimes: 4800 },
-        { year: '2023', crimes: 5100 },
-    ];
+    const baseLineData =
+        filters.period === '6-months'
+            ? [
+                { year: 'Nov', crimes: 380 },
+                { year: 'Dez', crimes: 450 },
+                { year: 'Jan', crimes: 410 },
+                { year: 'Fev', crimes: 390 },
+                { year: 'Mar', crimes: 470 },
+                { year: 'Abr', crimes: 510 },
+            ]
+            : filters.period === '1-year'
+                ? [
+                    { year: '2º Tri', crimes: 1120 },
+                    { year: '3º Tri', crimes: 1290 },
+                    { year: '4º Tri', crimes: 1410 },
+                    { year: '1º Tri', crimes: 1280 },
+                ]
+                : [
+                    { year: '2019', crimes: 2100 },
+                    { year: '2020', crimes: 3000 },
+                    { year: '2021', crimes: 4200 },
+                    { year: '2022', crimes: 4800 },
+                    { year: '2023', crimes: 5100 },
+                ];
 
+    const lineData = baseLineData.map((item) => ({
+        ...item,
+        crimes: Math.max(1, Math.round(item.crimes * typeMultiplier)),
+    }));
+    
     const barData = [
         { name: 'Centro', crimes: 1842 },
         { name: 'Patagônia', crimes: 1235 },

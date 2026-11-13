@@ -23,7 +23,7 @@ function App() {
           <MapView filters={filters} />
           <ChartsPanel filters={filters} />
         </div>
-        <RecentOccurrences />
+        <RecentOccurrences filters={filters}/>
       </main>
     </div>
   );

@@ -1,11 +1,16 @@
 import { FileText, ArrowRight } from 'lucide-react';
+import { crimeData } from '../data/mockData';
 
-export default function RecentOccurrences() {
-  const occurrences = [
-    { id: 1, date: '16/04/2026 - 22:17', type: 'Roubo', neighborhood: 'Centro', description: 'Roubo de celular em via pública.' },
-    { id: 2, date: '16/04/2026 - 21:50', type: 'Furto', neighborhood: 'Patagônia', description: 'Furto de bicicleta.' },
-    { id: 3, date: '16/04/2026 - 20:32', type: 'Lesão Corporal', neighborhood: 'Boa Vista', description: 'Agressão em estabelecimento.' },
-  ];
+export default function RecentOccurrences({ filters }) {
+  const occurrences = crimeData.filter(
+    (occ) => filters.crimeType === 'all' || occ.type === filters.crimeType
+  );
+
+  const formatDate = (isoDate: string) => {
+    const [datePart, timePart] = isoDate.split('T');
+    const [year, month, day] = datePart.split('-');
+    return `${day}/${month}/${year} - ${timePart.slice(0, 5)}`;
+  };
 
   return (
     <div className="recent-card">
@@ -16,13 +21,13 @@ export default function RecentOccurrences() {
         </div>
         <a href="#" className="view-all">Ver todas <ArrowRight size={16} /></a>
       </div>
-      
+
       <div className="table-container">
         <table className="recent-table">
           <tbody>
             {occurrences.map((occ) => (
               <tr key={occ.id}>
-                <td><span className="status-dot"></span>{occ.date}</td>
+                <td><span className="status-dot"></span>{formatDate(occ.date)}</td>
                 <td>{occ.type}</td>
                 <td>{occ.neighborhood}</td>
                 <td>{occ.description}</td>
