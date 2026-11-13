@@ -19,10 +19,10 @@ export default function HeatmapLayer({ points }: HeatmapLayerProps) {
       longitudeExtractor={(m: any) => m.lng}
       latitudeExtractor={(m: any) => m.lat}
       intensityExtractor={(m: any) => m.intensity}
-      radius={25}
-      blur={15}
+      radius={30}
+      blur={20}
       maxZoom={14}
-      gradient={{ 0.4: 'blue', 0.6: 'lime', 0.8: 'yellow', 1.0: 'red' }}
+      gradient={{ 0.3: '#4a0404', 0.5: '#8b0000', 0.8: '#e12c2c', 1.0: '#ff6b6b' }}
     />
   );
 }
