@@ -1,14 +1,25 @@
 import { MapContainer, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin } from 'lucide-react';
+import HeatmapLayer from './HeatmapLayer';
 
 interface MapViewProps {
   filters: any;
 }
 
+const position: [number, number] = [-14.8661, -40.8394];
+  const heatPoints: [number, number, number][] = [
+    [-14.8661, -40.8394, 1.0],
+    [-14.8650, -40.8380, 0.8],
+    [-14.8670, -40.8400, 0.9],
+    [-14.8780, -40.8500, 0.7],
+    [-14.8790, -40.8480, 0.6],
+    [-14.8850, -40.8300, 0.5],
+    [-14.8840, -40.8320, 0.4]
+  ];
+
 export default function MapView({ filters }: MapViewProps) {
-  const position: [number, number] = [-14.8661, -40.8394];
-  console.log('Filtros ativos:', filters);
+    console.log('Filtros ativos:', filters);
 
   return (
     <div className="map-card">
@@ -34,6 +45,7 @@ export default function MapView({ filters }: MapViewProps) {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           />
+         <HeatmapLayer points={heatPoints} />
         </MapContainer>
       </div>
     </div>
