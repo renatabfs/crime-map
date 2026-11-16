@@ -7,18 +7,27 @@ import { crimeData } from '../data/mockData';
 
 interface MapViewProps {
   filters: any;
+  searchQuery?: string;
 }
 
 const position: [number, number] = [-14.8661, -40.8394];
 
-export default function MapView({ filters }: MapViewProps) {
+export default function MapView({ filters, searchQuery = '' }: MapViewProps) {
   const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
   const intensity =
     filters.period === '1-year' ? 0.7 : filters.period === '6-months' ? 0.45 : 1.0;
 
-  const filteredCrimes = crimeData.filter(
-    (item) => filters.crimeType === 'all' || item.type === filters.crimeType
-  );
+  const query = searchQuery.trim().toLowerCase();
+
+  const filteredCrimes = crimeData.filter((item) => {
+    const matchesType = filters.crimeType === 'all' || item.type === filters.crimeType;
+    const matchesSearch =
+      !query ||
+      item.neighborhood.toLowerCase().includes(query) ||
+      item.type.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query);
+    return matchesType && matchesSearch;
+  });
 
   const heatPoints: [number, number, number][] = filteredCrimes.map((item) => [
     item.coords[0],

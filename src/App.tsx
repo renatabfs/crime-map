@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
 import HeaderStats from './components/HeaderStats';
 import './App.css';
 // @ts-ignore
@@ -9,11 +10,33 @@ import RecentOccurrences from './components/RecentOccurrences';
 
 function App() {
   const [activeTab, setActiveTab] = useState('home');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('crimemap-theme');
+    return saved === 'light' ? 'light' : 'dark';
+  });
+
   const [filters, setFilters] = useState({
     city: 'Vitória da Conquista',
     period: '5-years',
     crimeType: 'all',
   });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('crimemap-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (value.trim() && activeTab !== 'home') {
+      setActiveTab('home');
+    }
+  };
 
   return (
     <div className="dashboard-layout">
@@ -24,14 +47,21 @@ function App() {
         setActiveTab={setActiveTab}
       />
       <main className="main-content">
+        <Topbar
+          searchQuery={searchQuery}
+          setSearchQuery={handleSearchChange}
+          theme={theme}
+          toggleTheme={toggleTheme}
+          onOpenAnalytics={() => setActiveTab('analytics')}
+        />
         {activeTab === 'home' && (
           <>
             <HeaderStats filters={filters} />
             <div className="content-grid">
-              <MapView filters={filters} />
+              <MapView filters={filters} searchQuery={searchQuery} />
               <ChartsPanel filters={filters} />
             </div>
-            <RecentOccurrences filters={filters} />
+            <RecentOccurrences filters={filters} searchQuery={searchQuery} />
           </>
         )}
 

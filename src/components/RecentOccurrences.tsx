@@ -1,10 +1,23 @@
 import { FileText, ArrowRight } from 'lucide-react';
 import { crimeData } from '../data/mockData';
 
-export default function RecentOccurrences({ filters }) {
-  const occurrences = crimeData.filter(
-    (occ) => filters.crimeType === 'all' || occ.type === filters.crimeType
-  );
+interface RecentOccurrencesProps {
+  filters: any;
+  searchQuery?: string;
+}
+
+export default function RecentOccurrences({ filters, searchQuery = '' }: RecentOccurrencesProps) {
+  const query = searchQuery.trim().toLowerCase();
+
+  const occurrences = crimeData.filter((occ) => {
+    const matchesType = filters.crimeType === 'all' || occ.type === filters.crimeType;
+    const matchesSearch =
+      !query ||
+      occ.neighborhood.toLowerCase().includes(query) ||
+      occ.type.toLowerCase().includes(query) ||
+      occ.description.toLowerCase().includes(query);
+    return matchesType && matchesSearch;
+  });
 
   const formatDate = (isoDate: string) => {
     const [datePart, timePart] = isoDate.split('T');
