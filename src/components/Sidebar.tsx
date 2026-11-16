@@ -90,7 +90,7 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
         </a>
       </nav>
 
-      {activeTab !== 'about' && (
+      {activeTab !== 'about' && activeTab !== 'sources' && (
         <div className="filters-section">
           <div className="filter-group">
             <label>

@@ -4,6 +4,7 @@ import Topbar, { type SearchSelection } from './components/Topbar';
 import HeaderStats from './components/HeaderStats';
 import SearchResults from './components/SearchResults';
 import AboutProject from './components/AboutProject';
+import DataSources from './components/DataSources';
 import './App.css';
 // @ts-ignore
 import MapView from './components/MapView';
@@ -123,19 +124,7 @@ function App() {
           />
         )}
 
-        {activeTab === 'sources' && (
-          <div className="stat-card" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '16px', padding: '32px' }}>
-            <h2 style={{ fontSize: '24px' }}>Fontes de Dados</h2>
-            <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>
-              As informações exibidas nesta versão demonstrativa seguem a estrutura de boletins e estatísticas consolidadas pelos órgãos de segurança pública:
-            </p>
-            <ul style={{ color: 'var(--text-muted)', lineHeight: '1.8', paddingLeft: '20px' }}>
-              <li>Secretaria da Segurança Pública da Bahia (SSP-BA) — Estatísticas Criminais</li>
-              <li>Instituto Brasileiro de Geografia e Estatística (IBGE) — Malha Territorial e Bairros</li>
-              <li>OpenStreetMap & Esri World Imagery — Bases Cartográficas e Satélite</li>
-            </ul>
-          </div>
-        )}
+        {activeTab === 'sources' && <DataSources />}
       </main>
     </div>
   );
