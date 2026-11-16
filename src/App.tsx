@@ -48,10 +48,18 @@ function App() {
   };
 
   const handleClearSearch = () => {
+    setSearchQuery('');
     setConfirmedSearch(null);
     setFilters(defaultFilters);
     if (activeTab === 'search') {
       setActiveTab('home');
+    }
+  };
+
+  const handleSearchInput = (value: string) => {
+    setSearchQuery(value);
+    if (!value.trim()) {
+      handleClearSearch();
     }
   };
 
@@ -65,13 +73,15 @@ function App() {
           setActiveTab(tab);
           if (tab !== 'search') {
             setConfirmedSearch(null);
+            setSearchQuery('');
+            setFilters(defaultFilters);
           }
         }}
       />
       <main className="main-content">
         <Topbar
           searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
+          setSearchQuery={handleSearchInput}
           onConfirmSearch={handleConfirmSearch}
           onClearSearch={handleClearSearch}
           theme={theme}
