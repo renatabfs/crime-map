@@ -266,6 +266,10 @@ body {
   filter: grayscale(100%) invert(100%) contrast(95%);
 }
 
+.satellite-mode .leaflet-tile-pane {
+  filter: none;
+}
+
 .charts-column {
   display: flex;
   flex-direction: column;

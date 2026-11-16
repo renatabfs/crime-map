@@ -10,15 +10,6 @@ interface MapViewProps {
 }
 
 const position: [number, number] = [-14.8661, -40.8394];
-const heatPoints: [number, number, number][] = [
-  [-14.8661, -40.8394, 1.0],
-  [-14.8650, -40.8380, 0.8],
-  [-14.8670, -40.8400, 0.9],
-  [-14.8780, -40.8500, 0.7],
-  [-14.8790, -40.8480, 0.6],
-  [-14.8850, -40.8300, 0.5],
-  [-14.8840, -40.8320, 0.4]
-];
 
 export default function MapView({ filters }: MapViewProps) {
   const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
