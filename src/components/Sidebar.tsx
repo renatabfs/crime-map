@@ -50,7 +50,7 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
 
   return (
     <aside className="sidebar">
-      <div className="brand" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '16px', marginBottom: '10px' }}>
+      <div className="brand" style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px', marginBottom: '6px' }}>
         <Fingerprint size={64} color="#e12c2c" strokeWidth={1.5} />
         <div>
           <h1 style={{ fontSize: '28px', margin: 0, letterSpacing: '-0.5px' }}>CrimeMap</h1>
@@ -173,10 +173,15 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
         </div>
       )}
 
-      <div style={{ marginTop: 'auto', paddingTop: '20px', textAlign: 'center' }}>
-        <p style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.4' }}>"Dados que revelam<br />uma cidade mais segura."</p>
-        <div style={{ height: '120px', backgroundImage: 'url(https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=300&auto=format&fit=crop)', backgroundSize: 'cover', backgroundPosition: 'center', borderRadius: '8px', marginTop: '16px', opacity: 0.6 }}></div>
+      <div className="sidebar-quote">
+        <p>
+          “Dados que revelam
+          <br />
+          uma cidade mais segura.”
+        </p>
       </div>
+
+      <div className="sidebar-bottom-bg" />
     </aside>
   );
 }
