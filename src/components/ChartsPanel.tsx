@@ -29,14 +29,13 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
         { name: 'Outros', filterKey: 'Outros', value: 10.5, color: '#ffe6e6' },
     ];
 
-    const pieData = [
+    const pieData =
         filters.crimeType === 'all'
             ? basePieData
             : basePieData.map((item) => ({
                 ...item,
                 color: item.filterKey === filters.crimeType ? '#e12c2c' : '#2a2d37',
-            }))
-    ];
+            }));
 
     const baseLineData =
         filters.period === '6-months'
@@ -67,13 +66,13 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
         ...item,
         crimes: Math.max(1, Math.round(item.crimes * typeMultiplier)),
     }));
-    
+
     const barData = [
-        { name: 'Centro', crimes: 1842 },
-        { name: 'Patagônia', crimes: 1235 },
-        { name: 'Boa Vista', crimes: 1103 },
-        { name: 'Jardim Valéria', crimes: 987 },
-        { name: 'Candeias', crimes: 877 },
+        { name: 'Centro', crimes: Math.max(1, Math.round(1842 * factor)) },
+        { name: 'Patagônia', crimes: Math.max(1, Math.round(1235 * factor)) },
+        { name: 'Boa Vista', crimes: Math.max(1, Math.round(1103 * factor)) },
+        { name: 'Jardim Valéria', crimes: Math.max(1, Math.round(987 * factor)) },
+        { name: 'Candeias', crimes: Math.max(1, Math.round(877 * factor)) },
     ];
 
     return (
