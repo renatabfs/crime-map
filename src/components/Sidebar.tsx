@@ -13,9 +13,11 @@ import {
 interface SidebarProps {
   filters: any;
   setFilters: (filters: any) => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
 }
 
-export default function Sidebar({ filters, setFilters }: SidebarProps) {
+export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }: SidebarProps) {
   const [localFilters, setLocalFilters] = useState(filters);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -38,13 +40,34 @@ export default function Sidebar({ filters, setFilters }: SidebarProps) {
       </div>
 
       <nav className="nav-menu">
-        <a href="#" className="active">
+        <a
+          href="#"
+          className={activeTab === 'home' ? 'active' : ''}
+          onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('home');
+          }}
+        >
           <Home size={20} /> Início
         </a>
-        <a href="#">
+        <a
+          href="#"
+          className={activeTab === 'about' ? 'active' : ''}
+          onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('about');
+          }}
+        >
           <HelpCircle size={20} /> Sobre o projeto
         </a>
-        <a href="#">
+        <a
+          href="#"
+          className={activeTab === 'sources' ? 'active' : ''}
+          onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('sources');
+          }}
+        >
           <Database size={20} /> Fontes de dados
         </a>
       </nav>
