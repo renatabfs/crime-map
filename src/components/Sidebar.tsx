@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Home,
+  BarChart2,
   HelpCircle,
   Database,
   MapPin,
@@ -70,6 +71,16 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
         </a>
         <a
           href="#"
+          className={activeTab === 'analytics' ? 'active' : ''}
+          onClick={(e) => {
+            e.preventDefault();
+            setActiveTab('analytics');
+          }}
+        >
+          <BarChart2 size={20} /> Análises
+        </a>
+        <a
+          href="#"
           className={activeTab === 'about' ? 'active' : ''}
           onClick={(e) => {
             e.preventDefault();
@@ -133,6 +144,9 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
               <option value="6-months">Últimos 6 meses</option>
               <option value="1-year">Último ano</option>
               <option value="5-years">Últimos 5 anos</option>
+              <option value="2026">Ano de 2026</option>
+              <option value="2025">Ano de 2025</option>
+              <option value="2024">Ano de 2024</option>
             </select>
           </div>
 

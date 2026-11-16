@@ -5,6 +5,7 @@ import HeaderStats from './components/HeaderStats';
 import SearchResults from './components/SearchResults';
 import AboutProject from './components/AboutProject';
 import DataSources from './components/DataSources';
+import AnalyticsPage from './components/AnalyticsPage';
 import './App.css';
 // @ts-ignore
 import MapView from './components/MapView';
@@ -125,6 +126,7 @@ function App() {
         )}
 
         {activeTab === 'sources' && <DataSources />}
+        {activeTab === 'analytics' && <AnalyticsPage filters={filters} />}
       </main>
     </div>
   );
