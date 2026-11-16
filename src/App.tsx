@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Topbar, { type SearchSelection } from './components/Topbar';
 import HeaderStats from './components/HeaderStats';
 import SearchResults from './components/SearchResults';
+import AboutProject from './components/AboutProject';
 import './App.css';
 // @ts-ignore
 import MapView from './components/MapView';
@@ -113,12 +114,13 @@ function App() {
         )}
 
         {activeTab === 'about' && (
-          <div className="stat-card" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '16px', padding: '32px' }}>
-            <h2 style={{ fontSize: '24px' }}>Sobre o <span style={{ color: 'var(--accent-red)' }}>CrimeMap</span></h2>
-            <p style={{ color: 'var(--text-muted)', lineHeight: '1.6' }}>
-              O <strong>CrimeMap</strong> é uma plataforma de visualização e análise de dados sobre ocorrências criminais. Aqui, você encontra informações organizadas, mapas interativos e gráficos para entender melhor a realidade da sua cidade.
-            </p>
-          </div>
+          <AboutProject
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            onFocusSearch={() => {
+              const input = document.querySelector<HTMLInputElement>('.topbar-search input');
+              input?.focus();
+            }}
+          />
         )}
 
         {activeTab === 'sources' && (
