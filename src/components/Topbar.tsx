@@ -208,12 +208,6 @@ export default function Topbar({
                     )}
                 </div>
 
-                {!searchQuery.trim() && (
-                    <span className="search-hint">
-                        Pesquise uma cidade, bairro ou tipo de ocorrência
-                    </span>
-                )}
-
                 {isOpen && searchQuery.trim().length > 0 && (
                     <div className="search-dropdown">
                         {filteredSuggestions.length > 0 ? (

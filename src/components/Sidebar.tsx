@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Home,
   HelpCircle,
@@ -9,6 +9,7 @@ import {
   Fingerprint,
   SlidersHorizontal,
 } from 'lucide-react';
+import { citiesMetadata, crimeData } from '../data/mockData';
 
 interface SidebarProps {
   filters: any;
@@ -20,9 +21,26 @@ interface SidebarProps {
 export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }: SidebarProps) {
   const [localFilters, setLocalFilters] = useState(filters);
 
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
+
+  const availableNeighborhoods = useMemo(() => {
+    const filteredByCity =
+      localFilters.city === 'all'
+        ? crimeData
+        : crimeData.filter((item) => item.city === localFilters.city);
+
+    return Array.from(new Set(filteredByCity.map((item) => item.neighborhood))).sort();
+  }, [localFilters.city]);
+
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setLocalFilters({ ...localFilters, [name]: value });
+    if (name === 'city') {
+      setLocalFilters({ ...localFilters, city: value, neighborhood: 'all' });
+    } else {
+      setLocalFilters({ ...localFilters, [name]: value });
+    }
   };
 
   const handleApply = () => {
@@ -72,48 +90,74 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
         </a>
       </nav>
 
-      <div className="filters-section">
-        <div className="filter-group">
-          <label>
-            <MapPin size={16} /> Cidade
-          </label>
-          <select name="city" value={localFilters.city} onChange={handleChange}>
-            <option value="Vitória da Conquista">Vitória da Conquista</option>
-          </select>
-        </div>
+      {activeTab !== 'about' && (
+        <div className="filters-section">
+          <div className="filter-group">
+            <label>
+              <MapPin size={16} /> Cidade
+            </label>
+            <select name="city" value={localFilters.city} onChange={handleChange}>
+              <option value="all">Todas as cidades</option>
+              {citiesMetadata.map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="filter-group">
-          <label>
-            <Calendar size={16} /> Período
-          </label>
-          <select name="period" value={localFilters.period} onChange={handleChange}>
-            <option value="5-years">Últimos 5 anos</option>
-            <option value="1-year">Último ano</option>
-            <option value="6-months">Últimos 6 meses</option>
-          </select>
-        </div>
+          <div className="filter-group">
+            <label>
+              <MapPin size={16} /> Bairro
+            </label>
+            <select
+              name="neighborhood"
+              value={localFilters.neighborhood || 'all'}
+              onChange={handleChange}
+            >
+              <option value="all">Todos os bairros</option>
+              {availableNeighborhoods.map((neigh) => (
+                <option key={neigh} value={neigh}>
+                  {neigh}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="filter-group">
-          <label>
-            <Shield size={16} /> Tipo de ocorrência
-          </label>
-          <select
-            name="crimeType"
-            value={localFilters.crimeType}
-            onChange={handleChange}
-          >
-            <option value="all">Todos os tipos</option>
-            <option value="Roubo">Roubo</option>
-            <option value="Furto">Furto</option>
-            <option value="Lesão Corporal">Lesão Corporal</option>
-            <option value="Homicídio">Homicídio</option>
-          </select>
-        </div>
+          <div className="filter-group">
+            <label>
+              <Calendar size={16} /> Período
+            </label>
+            <select name="period" value={localFilters.period} onChange={handleChange}>
+              <option value="30-days">Últimos 30 dias</option>
+              <option value="6-months">Últimos 6 meses</option>
+              <option value="1-year">Último ano</option>
+              <option value="5-years">Últimos 5 anos</option>
+            </select>
+          </div>
 
-        <button className="apply-btn" onClick={handleApply}>
-          <SlidersHorizontal size={18} /> Aplicar Filtros
-        </button>
-      </div>
+          <div className="filter-group">
+            <label>
+              <Shield size={16} /> Tipo de ocorrência
+            </label>
+            <select
+              name="crimeType"
+              value={localFilters.crimeType}
+              onChange={handleChange}
+            >
+              <option value="all">Todos os tipos</option>
+              <option value="Roubo">Roubo</option>
+              <option value="Furto">Furto</option>
+              <option value="Lesão Corporal">Lesão Corporal</option>
+              <option value="Homicídio">Homicídio</option>
+            </select>
+          </div>
+
+          <button className="apply-btn" onClick={handleApply}>
+            <SlidersHorizontal size={18} /> Aplicar Filtros
+          </button>
+        </div>
+      )}
 
       <div style={{ marginTop: 'auto', paddingTop: '20px', textAlign: 'center' }}>
         <p style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: '13px', lineHeight: '1.4' }}>"Dados que revelam<br />uma cidade mais segura."</p>

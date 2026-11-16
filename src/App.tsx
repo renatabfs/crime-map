@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
-import Topbar from './components/Topbar';
+import Topbar, { type SearchSelection } from './components/Topbar';
 import HeaderStats from './components/HeaderStats';
+import SearchResults from './components/SearchResults';
 import './App.css';
 // @ts-ignore
 import MapView from './components/MapView';
@@ -11,6 +12,7 @@ import RecentOccurrences from './components/RecentOccurrences';
 function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
+  const [confirmedSearch, setConfirmedSearch] = useState<SearchSelection | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('crimemap-theme');
     return saved === 'light' ? 'light' : 'dark';
@@ -31,9 +33,20 @@ function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    if (value.trim() && activeTab !== 'home') {
+  const handleConfirmSearch = (selection: SearchSelection) => {
+    setConfirmedSearch(selection);
+    setFilters((prev) => ({
+      ...prev,
+      city: selection.city ? selection.city : 'all',
+      neighborhood: selection.neighborhood ? selection.neighborhood : 'all',
+      crimeType: selection.crimeType ? selection.crimeType : 'all',
+    }));
+    setActiveTab('search');
+  };
+
+  const handleClearSearch = () => {
+    setConfirmedSearch(null);
+    if (activeTab === 'search') {
       setActiveTab('home');
     }
   };
@@ -44,12 +57,19 @@ function App() {
         filters={filters}
         setFilters={setFilters}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          if (tab !== 'search') {
+            setConfirmedSearch(null);
+          }
+        }}
       />
       <main className="main-content">
         <Topbar
           searchQuery={searchQuery}
-          setSearchQuery={handleSearchChange}
+          setSearchQuery={setSearchQuery}
+          onConfirmSearch={handleConfirmSearch}
+          onClearSearch={handleClearSearch}
           theme={theme}
           toggleTheme={toggleTheme}
           onOpenAnalytics={() => setActiveTab('analytics')}
@@ -63,6 +83,18 @@ function App() {
             </div>
             <RecentOccurrences filters={filters} searchQuery={searchQuery} />
           </>
+        )}
+
+        {activeTab === 'search' && confirmedSearch && (
+          <SearchResults
+            confirmedSearch={confirmedSearch}
+            filters={filters}
+            onBackHome={() => {
+              setConfirmedSearch(null);
+              setSearchQuery('');
+              setActiveTab('home');
+            }}
+          />
         )}
 
         {activeTab === 'about' && (
