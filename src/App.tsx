@@ -18,11 +18,14 @@ function App() {
     return saved === 'light' ? 'light' : 'dark';
   });
 
-  const [filters, setFilters] = useState({
+  const defaultFilters = {
     city: 'Vitória da Conquista',
+    neighborhood: 'all',
     period: '5-years',
     crimeType: 'all',
-  });
+  };
+
+  const [filters, setFilters] = useState(defaultFilters);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -46,6 +49,7 @@ function App() {
 
   const handleClearSearch = () => {
     setConfirmedSearch(null);
+    setFilters(defaultFilters);
     if (activeTab === 'search') {
       setActiveTab('home');
     }
@@ -92,6 +96,7 @@ function App() {
             onBackHome={() => {
               setConfirmedSearch(null);
               setSearchQuery('');
+              setFilters(defaultFilters);
               setActiveTab('home');
             }}
           />
