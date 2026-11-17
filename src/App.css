@@ -24,6 +24,15 @@
   padding: 0;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+  height: auto;
+  overflow-x: clip;
+  overflow-y: auto !important;
+}
+
 body {
   background-color: var(--bg-dark);
   color: var(--text-main);
@@ -32,18 +41,8 @@ body {
 
 .dashboard-layout {
   display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.sidebar {
-  width: 280px;
-  background-color: var(--bg-dark);
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  gap: 32px;
+  min-height: 100vh;
+  align-items: stretch;
 }
 
 .brand {
@@ -143,11 +142,11 @@ body {
 
 .main-content {
   flex: 1;
+  min-width: 0;
   padding: 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
-  overflow-y: auto;
   background-color: var(--bg-dark);
 }
 
@@ -1887,11 +1886,16 @@ body {
 }
 
 .sidebar {
+  width: 280px;
+  flex-shrink: 0;
   position: relative;
-  height: auto;
   min-height: 100vh;
-  overflow: visible;
-  gap: 18px;
+  background-color: var(--bg-dark);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 20px;
 }
 
 .sidebar > *:not(.sidebar-bottom-bg) {
