@@ -6,9 +6,12 @@ import type { CrimeRecord } from '../services/crimeService';
 interface RecentOccurrencesProps {
   filters: any;
   searchQuery?: string;
+  onSelectOccurrence?: (occurrence: CrimeRecord) => void;
+  onViewAll?: () => void;
 }
 
-export default function RecentOccurrences({ filters, searchQuery = '' }: RecentOccurrencesProps) {
+export default function RecentOccurrences({ filters, searchQuery = '', onSelectOccurrence,
+  onViewAll, }: RecentOccurrencesProps) {
   const [occurrences, setOccurrences] = useState<CrimeRecord[]>([]);
 
   useEffect(() => {
@@ -42,14 +45,28 @@ export default function RecentOccurrences({ filters, searchQuery = '' }: RecentO
           <FileText size={20} color="#e12c2c" />
           <h3>Últimas Ocorrências</h3>
         </div>
-        <a href="#" className="view-all">Ver todas <ArrowRight size={16} /></a>
+        <button
+          type="button"
+          className="view-all"
+          onClick={onViewAll}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Ver todas <ArrowRight size={16} />
+        </button>
       </div>
 
       <div className="table-container">
         <table className="recent-table">
           <tbody>
             {occurrences.map((occ) => (
-              <tr key={occ.id}>
+              <tr key={occ.id} onClick={() => onSelectOccurrence && onSelectOccurrence(occ)}
+                style={{ cursor: 'pointer' }}
+                title="Clique para ver detalhes da ocorrência">
                 <td><span className="status-dot"></span>{formatDate(occ.date)}</td>
                 <td>{occ.type}</td>
                 <td>{occ.neighborhood}</td>

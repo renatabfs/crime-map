@@ -9,6 +9,7 @@ import type { CrimeRecord, CityMetadata } from '../services/crimeService';
 interface MapViewProps {
   filters: any;
   searchQuery?: string;
+  onSelectOccurrence?: (occurrence: CrimeRecord) => void;
 }
 
 function MapCameraController({
@@ -27,7 +28,7 @@ function MapCameraController({
   return null;
 }
 
-export default function MapView({ filters, searchQuery = '' }: MapViewProps) {
+export default function MapView({ filters, searchQuery = '', onSelectOccurrence, }: MapViewProps) {
   const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
   const [filteredCrimes, setFilteredCrimes] = useState<CrimeRecord[]>([]);
   const [cities, setCities] = useState<CityMetadata[]>([]);
@@ -191,6 +192,13 @@ export default function MapView({ filters, searchQuery = '' }: MapViewProps) {
                 key={crime.id}
                 center={crime.coords}
                 radius={7}
+                eventHandlers={{
+                  click: () => {
+                    if (onSelectOccurrence) {
+                      onSelectOccurrence(crime);
+                    }
+                  },
+                }}
                 pathOptions={{
                   color: '#ff6b6b',
                   fillColor: '#e12c2c',
