@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Database,
   Shield,
@@ -13,7 +13,7 @@ import {
   Globe,
   Code2,
 } from 'lucide-react';
-import { citiesMetadata, crimeData } from '../data/mockData';
+import { crimeService, DataSourceMetadata } from '../services/crimeService';
 
 interface SourceItem {
   id: string;
@@ -59,34 +59,21 @@ export default function DataSources() {
       icon: 'pin',
     },
   ];
-  const dynamicMetadata = useMemo(() => {
-    const totalCities = citiesMetadata.length;
-    const uniqueNeighborhoods = new Set(crimeData.map((r) => r.neighborhood)).size;
-    const uniqueSources = Array.from(new Set(crimeData.map((r) => r.source)));
+  const [dynamicMetadata, setDynamicMetadata] = useState<DataSourceMetadata>({
+    totalRecords: 0,
+    totalCities: 0,
+    uniqueNeighborhoods: 0,
+    periodLabel: 'Carregando...',
+    lastUpdateLabel: 'Carregando...',
+  });
 
-    const sortedDates = [...crimeData]
-      .map((r) => new Date(r.date))
-      .filter((d) => !isNaN(d.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime());
-
-    let periodLabel = 'Indisponível na base atual';
-    let lastUpdateLabel = 'Indisponível na base atual';
-
-    if (sortedDates.length > 0) {
-      const firstYear = sortedDates[0].getFullYear();
-      const lastDate = sortedDates[sortedDates.length - 1];
-      const lastYear = lastDate.getFullYear();
-      periodLabel = firstYear === lastYear ? `${firstYear}` : `${firstYear} – ${lastYear}`;
-      lastUpdateLabel = lastDate.toLocaleDateString('pt-BR');
-    }
-
-    return {
-      totalRecords: crimeData.length,
-      totalCities,
-      uniqueNeighborhoods,
-      uniqueSourcesCount: uniqueSources.length,
-      periodLabel,
-      lastUpdateLabel,
+  useEffect(() => {
+    let active = true;
+    crimeService.getDataSourcesSummary().then((summary) => {
+      if (active) setDynamicMetadata(summary);
+    });
+    return () => {
+      active = false;
     };
   }, []);
 
