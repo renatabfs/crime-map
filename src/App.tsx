@@ -6,6 +6,8 @@ import SearchResults from './components/SearchResults';
 import AboutProject from './components/AboutProject';
 import DataSources from './components/DataSources';
 import AnalyticsPage from './components/AnalyticsPage';
+import CrimeDetailsModal from './components/CrimeDetailsModal';
+import type { CrimeRecord } from './services/crimeService';
 import './App.css';
 // @ts-ignore
 import MapView from './components/MapView';
@@ -29,6 +31,7 @@ function App() {
   };
 
   const [filters, setFilters] = useState(defaultFilters);
+  const [selectedOccurrence, setSelectedOccurrence] = useState<CrimeRecord | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -95,10 +98,28 @@ function App() {
           <>
             <HeaderStats filters={filters} />
             <div className="content-grid">
-              <MapView filters={filters} searchQuery={searchQuery} />
+              <MapView filters={filters} searchQuery={searchQuery} onSelectOccurrence={(occ) => setSelectedOccurrence(occ)} />
               <ChartsPanel filters={filters} />
             </div>
-            <RecentOccurrences filters={filters} searchQuery={searchQuery} />
+            <RecentOccurrences filters={filters}
+              searchQuery={searchQuery}
+              onSelectOccurrence={(occ) => setSelectedOccurrence(occ)}
+              onViewAll={() => {
+                const targetCity =
+                  filters.city && filters.city !== 'all'
+                    ? filters.city
+                    : 'Vitória da Conquista';
+                handleConfirmSearch({
+                  label: targetCity,
+                  type: 'city',
+                  city: filters.city !== 'all' ? filters.city : undefined,
+                  neighborhood:
+                    filters.neighborhood !== 'all' ? filters.neighborhood : undefined,
+                  crimeType:
+                    filters.crimeType !== 'all' ? filters.crimeType : undefined,
+                });
+              }}
+            />
           </>
         )}
 
@@ -128,6 +149,10 @@ function App() {
         {activeTab === 'sources' && <DataSources />}
         {activeTab === 'analytics' && <AnalyticsPage filters={filters} />}
       </main>
+      <CrimeDetailsModal
+        occurrence={selectedOccurrence}
+        onClose={() => setSelectedOccurrence(null)}
+      />
     </div>
   );
 }
