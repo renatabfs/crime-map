@@ -50,20 +50,37 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
     }, [records]);
 
     const lineData = useMemo(() => {
-        const counts: Record<string, number> = {};
+        const byYear: Record<string, number> = {};
         records.forEach((r) => {
             const d = new Date(r.date);
             if (isNaN(d.getTime())) return;
-            const key =
-                filters.period === '6-months' || filters.period === '1-year'
-                    ? `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`
-                    : String(d.getFullYear());
-            counts[key] = (counts[key] || 0) + 1;
+            const y = String(d.getFullYear());
+            byYear[y] = (byYear[y] || 0) + 1;
         });
 
-        return Object.entries(counts)
+        const distinctYears = Object.keys(byYear);
+        if (distinctYears.length >= 2 && filters.period !== '6-months' && filters.period !== '1-year') {
+            return distinctYears
+                .sort((a, b) => a.localeCompare(b))
+                .map((year) => ({ year, crimes: byYear[year] }));
+        }
+
+        // Quando todos os registros filtrados estão no mesmo ano/mês, agrupa por dia (DD/MM) para formar a linha
+        const byDay: Record<string, { label: string; crimes: number }> = {};
+        records.forEach((r) => {
+            const d = new Date(r.date);
+            if (isNaN(d.getTime())) return;
+            const sortKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+            if (!byDay[sortKey]) {
+                byDay[sortKey] = { label, crimes: 0 };
+            }
+            byDay[sortKey].crimes += 1;
+        });
+
+        return Object.entries(byDay)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([year, crimes]) => ({ year, crimes }));
+            .map(([, item]) => ({ year: item.label, crimes: item.crimes }));
     }, [records, filters.period]);
 
     const barData = useMemo(() => {
