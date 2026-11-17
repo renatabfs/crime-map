@@ -1,5 +1,8 @@
+import { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, Tooltip, ResponsiveContainer, BarChart, Bar, YAxis } from 'recharts';
 import { PieChart as PieIcon, TrendingUp, MapPin } from 'lucide-react';
+import { crimeService } from '../services/crimeService';
+import type { CrimeRecord } from '../services/crimeService';
 
 interface ChartsPanelProps {
     filters: any;
@@ -7,73 +10,73 @@ interface ChartsPanelProps {
 
 export default function ChartsPanel({ filters }: ChartsPanelProps) {
 
-    const periodMultiplier =
-        filters.period === '1-year' ? 0.24 : filters.period === '6-months' ? 0.11 : 1;
+    const [records, setRecords] = useState<CrimeRecord[]>([]);
 
-    const typeMultipliers: Record<string, number> = {
-        all: 1,
-        Furto: 0.33,
-        Roubo: 0.26,
-        'Lesão Corporal': 0.18,
-        Homicídio: 0.12,
-    };
+    useEffect(() => {
+        let active = true;
+        crimeService
+            .getFilteredRecords({
+                city: filters.city,
+                neighborhood: filters.neighborhood,
+                period: filters.period,
+                crimeType: filters.crimeType,
+            })
+            .then((data) => {
+                if (active) setRecords(data);
+            });
+        return () => {
+            active = false;
+        };
+    }, [filters]);
 
-    const typeMultiplier = typeMultipliers[filters.crimeType] ?? 1;
-    const factor = periodMultiplier * typeMultiplier;
+    const pieData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        records.forEach((r) => {
+            counts[r.type] = (counts[r.type] || 0) + 1;
+        });
 
-    const basePieData = [
-        { name: 'Furto', filterKey: 'Furto', value: 32.7, color: '#e12c2c' },
-        { name: 'Roubo', filterKey: 'Roubo', value: 26.1, color: '#ff4d4d' },
-        { name: 'Lesão', filterKey: 'Lesão Corporal', value: 18.4, color: '#ff7979' },
-        { name: 'Homicídio', filterKey: 'Homicídio', value: 12.3, color: '#ffb3b3' },
-        { name: 'Outros', filterKey: 'Outros', value: 10.5, color: '#ffe6e6' },
-    ];
+        const palette = ['#e12c2c', '#ff4d4d', '#ff7979', '#ffb3b3', '#ffe6e6'];
+        const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
 
-    const pieData =
-        filters.crimeType === 'all'
-            ? basePieData
-            : basePieData.map((item) => ({
-                ...item,
-                color: item.filterKey === filters.crimeType ? '#e12c2c' : '#2a2d37',
-            }));
+        if (entries.length === 0) {
+            return [{ name: 'Sem registros', value: 1, color: '#2a2d37' }];
+        }
 
-    const baseLineData =
-        filters.period === '6-months'
-            ? [
-                { year: 'Nov', crimes: 380 },
-                { year: 'Dez', crimes: 450 },
-                { year: 'Jan', crimes: 410 },
-                { year: 'Fev', crimes: 390 },
-                { year: 'Mar', crimes: 470 },
-                { year: 'Abr', crimes: 510 },
-            ]
-            : filters.period === '1-year'
-                ? [
-                    { year: '2º Tri', crimes: 1120 },
-                    { year: '3º Tri', crimes: 1290 },
-                    { year: '4º Tri', crimes: 1410 },
-                    { year: '1º Tri', crimes: 1280 },
-                ]
-                : [
-                    { year: '2019', crimes: 2100 },
-                    { year: '2020', crimes: 3000 },
-                    { year: '2021', crimes: 4200 },
-                    { year: '2022', crimes: 4800 },
-                    { year: '2023', crimes: 5100 },
-                ];
+        return entries.map(([name, value], idx) => ({
+            name,
+            value,
+            color: palette[idx % palette.length],
+        }));
+    }, [records]);
 
-    const lineData = baseLineData.map((item) => ({
-        ...item,
-        crimes: Math.max(1, Math.round(item.crimes * typeMultiplier)),
-    }));
+    const lineData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        records.forEach((r) => {
+            const d = new Date(r.date);
+            if (isNaN(d.getTime())) return;
+            const key =
+                filters.period === '6-months' || filters.period === '1-year'
+                    ? `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`
+                    : String(d.getFullYear());
+            counts[key] = (counts[key] || 0) + 1;
+        });
 
-    const barData = [
-        { name: 'Centro', crimes: Math.max(1, Math.round(1842 * factor)) },
-        { name: 'Patagônia', crimes: Math.max(1, Math.round(1235 * factor)) },
-        { name: 'Boa Vista', crimes: Math.max(1, Math.round(1103 * factor)) },
-        { name: 'Jardim Valéria', crimes: Math.max(1, Math.round(987 * factor)) },
-        { name: 'Candeias', crimes: Math.max(1, Math.round(877 * factor)) },
-    ];
+        return Object.entries(counts)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([year, crimes]) => ({ year, crimes }));
+    }, [records, filters.period]);
+
+    const barData = useMemo(() => {
+        const counts: Record<string, number> = {};
+        records.forEach((r) => {
+            counts[r.neighborhood] = (counts[r.neighborhood] || 0) + 1;
+        });
+
+        return Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name, crimes]) => ({ name, crimes }));
+    }, [records]);
 
     return (
         <div className="charts-column">

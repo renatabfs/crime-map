@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { FileText, ArrowRight } from 'lucide-react';
-import { crimeData } from '../data/mockData';
+import { crimeService } from '../services/crimeService';
+import type { CrimeRecord } from '../services/crimeService';
 
 interface RecentOccurrencesProps {
   filters: any;
@@ -7,17 +9,25 @@ interface RecentOccurrencesProps {
 }
 
 export default function RecentOccurrences({ filters, searchQuery = '' }: RecentOccurrencesProps) {
-  const query = searchQuery.trim().toLowerCase();
+  const [occurrences, setOccurrences] = useState<CrimeRecord[]>([]);
 
-  const occurrences = crimeData.filter((occ) => {
-    const matchesType = filters.crimeType === 'all' || occ.type === filters.crimeType;
-    const matchesSearch =
-      !query ||
-      occ.neighborhood.toLowerCase().includes(query) ||
-      occ.type.toLowerCase().includes(query) ||
-      occ.description.toLowerCase().includes(query);
-    return matchesType && matchesSearch;
-  });
+  useEffect(() => {
+    let active = true;
+    crimeService
+      .getFilteredRecords({
+        city: filters.city,
+        neighborhood: filters.neighborhood,
+        period: filters.period,
+        crimeType: filters.crimeType,
+        searchQuery,
+      })
+      .then((data) => {
+        if (active) setOccurrences(data);
+      });
+    return () => {
+      active = false;
+    };
+  }, [filters, searchQuery]);
 
   const formatDate = (isoDate: string) => {
     const [datePart, timePart] = isoDate.split('T');
