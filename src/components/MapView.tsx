@@ -1,33 +1,96 @@
-import { useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import { useState, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, Layers, Flame } from 'lucide-react';
 import HeatmapLayer from './HeatmapLayer';
-import { crimeData } from '../data/mockData';
+import { crimeService } from '../services/crimeService';
+import type { CrimeRecord, CityMetadata } from '../services/crimeService';
 
 interface MapViewProps {
   filters: any;
   searchQuery?: string;
 }
 
-const position: [number, number] = [-14.8661, -40.8394];
+function MapCameraController({
+  center,
+  zoom,
+}: {
+  center: [number, number];
+  zoom: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.flyTo(center, zoom, { duration: 0.9 });
+  }, [center, zoom, map]);
+
+  return null;
+}
 
 export default function MapView({ filters, searchQuery = '' }: MapViewProps) {
   const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
+  const [filteredCrimes, setFilteredCrimes] = useState<CrimeRecord[]>([]);
+  const [cities, setCities] = useState<CityMetadata[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    crimeService.getCitiesMetadata().then((list) => {
+      if (active) setCities(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    crimeService
+      .getFilteredRecords({
+        city: filters.city,
+        neighborhood: filters.neighborhood,
+        period: filters.period,
+        crimeType: filters.crimeType,
+        searchQuery,
+      })
+      .then((records) => {
+        if (active) setFilteredCrimes(records);
+      });
+    return () => {
+      active = false;
+    };
+  }, [filters, searchQuery]);
+
+  const { cameraCenter, cameraZoom } = useMemo(() => {
+    if (
+      filters.neighborhood &&
+      filters.neighborhood !== 'all' &&
+      filteredCrimes.length > 0
+    ) {
+      return {
+        cameraCenter: filteredCrimes[0].coords as [number, number],
+        cameraZoom: 15,
+      };
+    }
+
+    const selectedCityMeta = cities.find(
+      (c) => c.name.toLowerCase() === (filters.city || '').toLowerCase()
+    );
+
+    if (selectedCityMeta) {
+      return {
+        cameraCenter: selectedCityMeta.coords,
+        cameraZoom: selectedCityMeta.zoom,
+      };
+    }
+
+    return {
+      cameraCenter: [-14.8661, -40.8394] as [number, number],
+      cameraZoom: 13,
+    };
+  }, [filters.city, filters.neighborhood, cities, filteredCrimes]);
+
   const intensity =
     filters.period === '1-year' ? 0.7 : filters.period === '6-months' ? 0.45 : 1.0;
-
-  const query = searchQuery.trim().toLowerCase();
-
-  const filteredCrimes = crimeData.filter((item) => {
-    const matchesType = filters.crimeType === 'all' || item.type === filters.crimeType;
-    const matchesSearch =
-      !query ||
-      item.neighborhood.toLowerCase().includes(query) ||
-      item.type.toLowerCase().includes(query) ||
-      item.description.toLowerCase().includes(query);
-    return matchesType && matchesSearch;
-  });
 
   const heatPoints: [number, number, number][] = filteredCrimes.map((item) => [
     item.coords[0],
@@ -102,10 +165,11 @@ export default function MapView({ filters, searchQuery = '' }: MapViewProps) {
 
       <div className={`map-wrapper ${mapMode === 'satellite' ? 'satellite-mode' : ''}`}>
         <MapContainer
-          center={position}
-          zoom={13}
+          center={cameraCenter}
+          zoom={cameraZoom}
           style={{ height: '100%', width: '100%' }}
         >
+          <MapCameraController center={cameraCenter} zoom={cameraZoom} />
           {mapMode === 'satellite' ? (
             <TileLayer
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -118,7 +182,8 @@ export default function MapView({ filters, searchQuery = '' }: MapViewProps) {
             />
           )}
 
-          <HeatmapLayer key={`${filters.period}-${filters.crimeType}-${mapMode}`} points={heatPoints} />
+          <HeatmapLayer key={`${filters.city}-${filters.neighborhood}-${filters.period}-${filters.crimeType}-${mapMode}`}
+            points={heatPoints} />
 
           {mapMode === 'map' &&
             filteredCrimes.map((crime) => (
