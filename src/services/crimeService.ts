@@ -1,4 +1,7 @@
-import { crimeData, citiesMetadata, CrimeRecord, CityMetadata } from '../data/mockData';
+import { crimeData, citiesMetadata } from '../data/mockData';
+import type { CrimeRecord, CityMetadata } from '../data/mockData';
+
+export type { CrimeRecord, CityMetadata };
 
 export interface CrimeFilters {
   city?: string;
@@ -72,7 +75,7 @@ function filterRecordsLocally(records: CrimeRecord[], filters?: CrimeFilters): C
         record.city.toLowerCase().includes(q) ||
         record.neighborhood.toLowerCase().includes(q) ||
         record.type.toLowerCase().includes(q) ||
-        record.description.toLowerCase().includes(q);
+        (record.description || '').toLowerCase().includes(q);
       if (!matches) return false;
     }
 

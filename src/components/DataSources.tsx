@@ -13,7 +13,8 @@ import {
   Globe,
   Code2,
 } from 'lucide-react';
-import { crimeService, DataSourceMetadata } from '../services/crimeService';
+import { crimeService } from '../services/crimeService';
+import type { DataSourceMetadata } from '../services/crimeService';
 
 interface SourceItem {
   id: string;
