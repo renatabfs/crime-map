@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
     ShieldAlert,
     TrendingUp,
@@ -23,7 +23,8 @@ import {
     Tooltip,
     CartesianGrid,
 } from 'recharts';
-import { crimeData } from '../data/mockData';
+import type { CrimeRecord } from '../data/mockData';
+import { crimeService } from '../services/crimeService';
 
 interface AnalyticsPageProps {
     filters: {
@@ -38,9 +39,21 @@ export default function AnalyticsPage({ filters }: AnalyticsPageProps) {
     const [evolutionRange, setEvolutionRange] = useState<'6m' | '12m' | '24m' | '5y'>('12m');
     const [showAllNeighborhoods, setShowAllNeighborhoods] = useState(false);
 
+    const [records, setRecords] = useState<CrimeRecord[]>([]);
+
+    useEffect(() => {
+        let active = true;
+        crimeService.getAllRecords().then((data) => {
+            if (active) setRecords(data);
+        });
+        return () => {
+            active = false;
+        };
+    }, []);
+
     const referenceDate = useMemo(() => {
-        if (crimeData.length === 0) return new Date();
-        return new Date(Math.max(...crimeData.map((r) => new Date(r.date).getTime())));
+        if (records.length === 0) return new Date();
+        return new Date(Math.max(...records.map((r) => new Date(r.date).getTime())));
     }, []);
 
     const classifyRecordPeriod = (recDate: Date, periodKey: string): 'current' | 'previous' | 'outside' => {
@@ -70,7 +83,7 @@ export default function AnalyticsPage({ filters }: AnalyticsPageProps) {
     };
 
     const scopeRecords = useMemo(() => {
-        return crimeData.filter((record) => {
+        return records.filter((record) => {
             if (
                 filters.city &&
                 filters.city !== 'all' &&
@@ -100,8 +113,8 @@ export default function AnalyticsPage({ filters }: AnalyticsPageProps) {
     }, [filters.city, filters.neighborhood, filters.crimeType]);
 
     const { currentRecords, previousRecords } = useMemo(() => {
-        const current: typeof crimeData = [];
-        const previous: typeof crimeData = [];
+        const current: typeof CrimeRecord = [];
+        const previous: typeof CrimeRecord = [];
 
         scopeRecords.forEach((rec) => {
             const bucket = classifyRecordPeriod(new Date(rec.date), filters.period);
