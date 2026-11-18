@@ -107,6 +107,25 @@ export default function CrimeDetailsModal({
                                 </span>
                                 <div className="cm-detail-texts">
                                     <span className="cm-detail-label">Tipo de ocorrência</span>
+                                    <span className="cm-detail-label">Tipo de ocorrência</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                        <span className="cm-type-badge">{occurrence.type}</span>
+                                        {occurrence.isSimulated !== false && (
+                                            <span
+                                                style={{
+                                                    fontSize: '11px',
+                                                    fontWeight: 600,
+                                                    padding: '3px 8px',
+                                                    borderRadius: '6px',
+                                                    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+                                                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                                                    color: '#fbbf24',
+                                                }}
+                                            >
+                                                Dados simulados (Demonstração)
+                                            </span>
+                                        )}
+                                    </div>
                                     <span className="cm-type-badge">{occurrence.type}</span>
                                 </div>
                             </div>
