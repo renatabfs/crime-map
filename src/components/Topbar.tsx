@@ -264,11 +264,11 @@ export default function Topbar({
                     onClick={toggleTheme}
                     title={theme === 'dark' ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
                 >
-                    <Sun size={15} className={theme === 'light' ? 'active-theme-icon' : ''} />
+                    <Moon size={15} className={theme === 'dark' ? 'active-theme-icon' : ''} />
                     <span className={`toggle-track ${theme === 'light' ? 'light' : ''}`}>
                         <span className="toggle-thumb" />
                     </span>
-                    <Moon size={15} className={theme === 'dark' ? 'active-theme-icon' : ''} />
+                    <Sun size={15} className={theme === 'light' ? 'active-theme-icon' : ''} />
                 </button>
 
                 <div className="topbar-divider" />
