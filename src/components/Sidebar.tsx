@@ -11,7 +11,8 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { citiesMetadata, crimeData } from '../data/mockData';
+import { crimeService, BRAZIL_STATES } from '../services/crimeService';
+import type { CityMetadata } from '../services/crimeService';
 
 interface SidebarProps {
   filters: any;
@@ -30,18 +31,41 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
     setLocalFilters(filters);
   }, [filters]);
 
-  const availableNeighborhoods = useMemo(() => {
-    const filteredByCity =
-      localFilters.city === 'all'
-        ? crimeData
-        : crimeData.filter((item) => item.city === localFilters.city);
+  const [availableCities, setAvailableCities] = useState<CityMetadata[]>([]);
+  const [availableNeighborhoods, setAvailableNeighborhoods] = useState<string[]>([]);
 
-    return Array.from(new Set(filteredByCity.map((item) => item.neighborhood))).sort();
-  }, [localFilters.city]);
+  useEffect(() => {
+    let active = true;
+    crimeService.getCitiesMetadata(localFilters.state).then((list) => {
+      if (active) setAvailableCities(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, [localFilters.state]);
+
+  useEffect(() => {
+    let active = true;
+    crimeService
+      .getNeighborhoodsByCity(localFilters.city, localFilters.state)
+      .then((list) => {
+        if (active) setAvailableNeighborhoods(list);
+      });
+    return () => {
+      active = false;
+    };
+  }, [localFilters.city, localFilters.state]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'city') {
+    if (name === 'state') {
+      setLocalFilters({
+        ...localFilters,
+        state: value,
+        city: 'all',
+        neighborhood: 'all',
+      });
+    } else if (name === 'city') {
       setLocalFilters({ ...localFilters, city: value, neighborhood: 'all' });
     } else {
       setLocalFilters({ ...localFilters, [name]: value });
@@ -120,13 +144,31 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
         <div className="filters-section">
           <div className="filter-group">
             <label>
+              <MapPin size={16} /> Estado (UF)
+            </label>
+            <select
+              name="state"
+              value={localFilters.state || 'all'}
+              onChange={handleChange}
+            >
+              <option value="all">Todo o Brasil (27 UFs)</option>
+              {BRAZIL_STATES.map((st) => (
+                <option key={st.uf} value={st.uf}>
+                  {st.name} ({st.uf})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label>
               <MapPin size={16} /> Cidade
             </label>
             <select name="city" value={localFilters.city} onChange={handleChange}>
               <option value="all">Todas as cidades</option>
-              {citiesMetadata.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name}
+              {availableCities.map((c) => (
+                <option key={`${c.name}-${c.state}`} value={c.name}>
+                  {c.name} ({c.state})
                 </option>
               ))}
             </select>
