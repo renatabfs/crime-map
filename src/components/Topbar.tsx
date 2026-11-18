@@ -3,6 +3,7 @@ import {
     Search, X, Sun, Moon, BarChart2, Building2,
     MapPin,
     ShieldAlert,
+    Menu,
 } from 'lucide-react';
 import { citiesMetadata, crimeData } from '../data/mockData';
 
@@ -22,10 +23,12 @@ interface SuggestionItem extends SearchSelection {
 interface TopbarProps {
     searchQuery: string;
     setSearchQuery: (query: string) => void;
+    onConfirmSearch: (selection: SearchSelection) => void;
     onClearSearch: () => void;
     theme: 'dark' | 'light';
     toggleTheme: () => void;
     onOpenAnalytics: () => void;
+    onToggleMobileMenu?: () => void;
 }
 
 export default function Topbar({
@@ -36,6 +39,7 @@ export default function Topbar({
     theme,
     toggleTheme,
     onOpenAnalytics,
+    onToggleMobileMenu,
 }: TopbarProps) {
     const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
     const [isOpen, setIsOpen] = useState(false);
@@ -176,71 +180,83 @@ export default function Topbar({
     };
     return (
         <header className="topbar">
-            <div className="topbar-search-wrapper" ref={wrapperRef}>
-                <div className="topbar-search">
-                    <Search size={18} className="search-icon" />
-                    <input
-                        type="text"
-                        placeholder="Buscar por cidade, bairro ou tipo de ocorrência..."
-                        value={searchQuery}
-                        onFocus={() => setIsOpen(true)}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setIsOpen(true);
-                            setHighlightedIndex(-1);
-                        }}
-                        onKeyDown={handleKeyDown}
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            className="clear-search-btn"
-                            onClick={() => {
-                                setSearchQuery('');
-                                setIsOpen(false);
+            <div className="topbar-left-group">
+                {onToggleMobileMenu && (
+                    <button
+                        type="button"
+                        className="mobile-menu-btn"
+                        onClick={onToggleMobileMenu}
+                        aria-label="Abrir menu e filtros"
+                        title="Menu e Filtros"
+                    >
+                        <Menu size={20} />
+                    </button>
+                )}
+                <div className="topbar-search-wrapper" ref={wrapperRef}>
+                    <div className="topbar-search">
+                        <Search size={18} className="search-icon" />
+                        <input
+                            type="text"
+                            placeholder="Buscar por cidade, bairro ou tipo de ocorrência..."
+                            value={searchQuery}
+                            onFocus={() => setIsOpen(true)}
+                            onChange={(e) => {
+                                setSearchQuery(e.target.value);
+                                setIsOpen(true);
                                 setHighlightedIndex(-1);
-                                onClearSearch();
                             }}
-                            title="Limpar pesquisa"
-                        >
-                            <X size={16} />
-                        </button>
-                    )}
-                </div>
-
-                {isOpen && searchQuery.trim().length > 0 && (
-                    <div className="search-dropdown">
-                        {filteredSuggestions.length > 0 ? (
-                            filteredSuggestions.map((item, idx) => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    className={`search-suggestion-item ${idx === highlightedIndex ? 'highlighted' : ''
-                                        }`}
-                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                    onClick={() => handleSelect(item)}
-                                >
-                                    <div className="suggestion-left">
-                                        {renderCategoryIcon(item.category)}
-                                        <div>
-                                            <div className="suggestion-label">{item.label}</div>
-                                            {item.subtitle && (
-                                                <div className="suggestion-sub">{item.subtitle}</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <span className="suggestion-badge">{item.category}</span>
-                                </button>
-                            ))
-                        ) : (
-                            <div className="search-dropdown-empty">
-                                Pressione <strong>Enter</strong> para buscar por "{searchQuery.trim()}"
-                            </div>
+                            onKeyDown={handleKeyDown}
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                className="clear-search-btn"
+                                onClick={() => {
+                                    setSearchQuery('');
+                                    setIsOpen(false);
+                                    setHighlightedIndex(-1);
+                                    onClearSearch();
+                                }}
+                                title="Limpar pesquisa"
+                            >
+                                <X size={16} />
+                            </button>
                         )}
                     </div>
-                )}
-            </div>
 
+                    {isOpen && searchQuery.trim().length > 0 && (
+                        <div className="search-dropdown">
+                            {filteredSuggestions.length > 0 ? (
+                                filteredSuggestions.map((item, idx) => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        className={`search-suggestion-item ${idx === highlightedIndex ? 'highlighted' : ''
+                                            }`}
+                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                        onClick={() => handleSelect(item)}
+                                    >
+                                        <div className="suggestion-left">
+                                            {renderCategoryIcon(item.category)}
+                                            <div>
+                                                <div className="suggestion-label">{item.label}</div>
+                                                {item.subtitle && (
+                                                    <div className="suggestion-sub">{item.subtitle}</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className="suggestion-badge">{item.category}</span>
+                                    </button>
+                                ))
+                            ) : (
+                                <div className="search-dropdown-empty">
+                                    Pressione <strong>Enter</strong> para buscar por "{searchQuery.trim()}"
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
             <div className="topbar-actions">
                 <button
                     type="button"
