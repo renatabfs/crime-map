@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaf
 import 'leaflet/dist/leaflet.css';
 import { MapPin, Layers, Flame } from 'lucide-react';
 import HeatmapLayer from './HeatmapLayer';
-import { crimeService } from '../services/crimeService';
+import { crimeService, BRAZIL_STATES } from '../services/crimeService';
 import type { CrimeRecord, CityMetadata } from '../services/crimeService';
 
 interface MapViewProps {
@@ -47,6 +47,7 @@ export default function MapView({ filters, searchQuery = '', onSelectOccurrence,
     let active = true;
     crimeService
       .getFilteredRecords({
+        state: filters.state,
         city: filters.city,
         neighborhood: filters.neighborhood,
         period: filters.period,
@@ -84,11 +85,29 @@ export default function MapView({ filters, searchQuery = '', onSelectOccurrence,
       };
     }
 
+    const selectedStateMeta = BRAZIL_STATES.find(
+      (s) => s.uf.toLowerCase() === (filters.state || '').toLowerCase()
+    );
+
+    if (selectedStateMeta) {
+      return {
+        cameraCenter: selectedStateMeta.coords,
+        cameraZoom: selectedStateMeta.zoom,
+      };
+    }
+
+    if (filters.city === 'all' && (!filters.state || filters.state === 'all')) {
+      return {
+        cameraCenter: [-14.235, -51.9253] as [number, number],
+        cameraZoom: 4,
+      };
+    }
+
     return {
       cameraCenter: [-14.8661, -40.8394] as [number, number],
       cameraZoom: 13,
     };
-  }, [filters.city, filters.neighborhood, cities, filteredCrimes]);
+  }, [filters.state, filters.city, filters.neighborhood, cities, filteredCrimes]);
 
   const intensity =
     filters.period === '1-year' ? 0.7 : filters.period === '6-months' ? 0.45 : 1.0;
@@ -105,6 +124,20 @@ export default function MapView({ filters, searchQuery = '', onSelectOccurrence,
         <div className="map-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <MapPin size={20} color="#e12c2c" />
           <h3 style={{ margin: 0 }}>Mapa de Criminalidade</h3>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: '2px 8px',
+              borderRadius: '999px',
+              backgroundColor: 'rgba(245, 158, 11, 0.14)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              color: '#fbbf24',
+            }}
+            title="Municípios carregados via API oficial do IBGE; ocorrências geradas para demonstração."
+          >
+            Base Demonstrativa
+          </span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
