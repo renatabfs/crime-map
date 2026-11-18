@@ -63,9 +63,11 @@ export default function DataSources() {
   const [dynamicMetadata, setDynamicMetadata] = useState<DataSourceMetadata>({
     totalRecords: 0,
     totalCities: 0,
+    totalStates: 0,
     uniqueNeighborhoods: 0,
     periodLabel: 'Carregando...',
     lastUpdateLabel: 'Carregando...',
+    coverageScope: 'Carregando...',
   });
 
   useEffect(() => {
