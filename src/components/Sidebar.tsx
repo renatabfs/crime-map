@@ -9,6 +9,7 @@ import {
   Shield,
   Fingerprint,
   SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { citiesMetadata, crimeData } from '../data/mockData';
 
@@ -17,9 +18,12 @@ interface SidebarProps {
   setFilters: (filters: any) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isOpenMobile?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }: SidebarProps) {
+export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, isOpenMobile = false,
+  onCloseMobile, }: SidebarProps) {
   const [localFilters, setLocalFilters] = useState(filters);
 
   useEffect(() => {
@@ -46,10 +50,21 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab }
 
   const handleApply = () => {
     setFilters(localFilters);
+    if (onCloseMobile) onCloseMobile();
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpenMobile ? 'mobile-open' : ''}`}>
+      {onCloseMobile && (
+        <button
+          type="button"
+          className="sidebar-mobile-close"
+          onClick={onCloseMobile}
+          aria-label="Fechar menu"
+        >
+          <X size={20} />
+        </button>
+      )}
       <div className="brand" style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px', marginBottom: '6px' }}>
         <Fingerprint size={64} color="#e12c2c" strokeWidth={1.5} />
         <div>
