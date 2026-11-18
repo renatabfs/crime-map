@@ -32,6 +32,7 @@ function App() {
 
   const [filters, setFilters] = useState(defaultFilters);
   const [selectedOccurrence, setSelectedOccurrence] = useState<CrimeRecord | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -71,10 +72,18 @@ function App() {
 
   return (
     <div className="dashboard-layout">
+      {isMobileMenuOpen && (
+        <div
+          className="sidebar-mobile-backdrop"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
       <Sidebar
         filters={filters}
         setFilters={setFilters}
         activeTab={activeTab}
+        isOpenMobile={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
         setActiveTab={(tab) => {
           setActiveTab(tab);
           if (tab !== 'search') {
@@ -93,6 +102,7 @@ function App() {
           theme={theme}
           toggleTheme={toggleTheme}
           onOpenAnalytics={() => setActiveTab('analytics')}
+          onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
         />
         {activeTab === 'home' && (
           <>
