@@ -1,9 +1,14 @@
 import { crimeData, citiesMetadata } from '../data/mockData';
-import type { CrimeRecord, CityMetadata } from '../data/mockData';
+import type { CrimeRecord as BaseCrimeRecord, CityMetadata } from '../data/mockData';
 
-export type { CrimeRecord, CityMetadata };
+export interface CrimeRecord extends BaseCrimeRecord {
+  isSimulated?: boolean;
+}
+
+export type { CityMetadata };
 
 export interface CrimeFilters {
+  state?: string;
   city?: string;
   neighborhood?: string;
   period?: string;
@@ -11,16 +16,136 @@ export interface CrimeFilters {
   searchQuery?: string;
 }
 
+export interface StateMetadata {
+  uf: string;
+  name: string;
+  coords: [number, number];
+  zoom: number;
+}
+
 export interface DataSourceMetadata {
   totalRecords: number;
   totalCities: number;
+  totalStates: number;
   uniqueNeighborhoods: number;
   periodLabel: string;
   lastUpdateLabel: string;
+  coverageScope: string;
 }
 
-const USE_REAL_API = false;
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+export const BRAZIL_STATES: StateMetadata[] = [
+  { uf: 'AC', name: 'Acre', coords: [-9.0238, -70.812], zoom: 7 },
+  { uf: 'AL', name: 'Alagoas', coords: [-9.5713, -36.782], zoom: 8 },
+  { uf: 'AP', name: 'Amapá', coords: [1.4102, -51.77], zoom: 7 },
+  { uf: 'AM', name: 'Amazonas', coords: [-3.4168, -65.8561], zoom: 6 },
+  { uf: 'BA', name: 'Bahia', coords: [-12.5797, -41.7007], zoom: 7 },
+  { uf: 'CE', name: 'Ceará', coords: [-5.4984, -39.3206], zoom: 7 },
+  { uf: 'DF', name: 'Distrito Federal', coords: [-15.7998, -47.8645], zoom: 10 },
+  { uf: 'ES', name: 'Espírito Santo', coords: [-19.1834, -40.3089], zoom: 8 },
+  { uf: 'GO', name: 'Goiás', coords: [-15.827, -49.8362], zoom: 7 },
+  { uf: 'MA', name: 'Maranhão', coords: [-4.9609, -45.2744], zoom: 7 },
+  { uf: 'MT', name: 'Mato Grosso', coords: [-12.6819, -56.9211], zoom: 6 },
+  { uf: 'MS', name: 'Mato Grosso do Sul', coords: [-20.7722, -54.7852], zoom: 7 },
+  { uf: 'MG', name: 'Minas Gerais', coords: [-18.5122, -44.555], zoom: 7 },
+  { uf: 'PA', name: 'Pará', coords: [-3.4168, -52.2166], zoom: 6 },
+  { uf: 'PB', name: 'Paraíba', coords: [-7.24, -36.782], zoom: 8 },
+  { uf: 'PR', name: 'Paraná', coords: [-24.8932, -51.55], zoom: 7 },
+  { uf: 'PE', name: 'Pernambuco', coords: [-8.8137, -36.9541], zoom: 8 },
+  { uf: 'PI', name: 'Piauí', coords: [-7.7183, -42.7289], zoom: 7 },
+  { uf: 'RJ', name: 'Rio de Janeiro', coords: [-22.25, -42.66], zoom: 8 },
+  { uf: 'RN', name: 'Rio Grande do Norte', coords: [-5.4026, -36.9541], zoom: 8 },
+  { uf: 'RS', name: 'Rio Grande do Sul', coords: [-30.0346, -53.2177], zoom: 7 },
+  { uf: 'RO', name: 'Rondônia', coords: [-10.83, -63.34], zoom: 7 },
+  { uf: 'RR', name: 'Roraima', coords: [2.7376, -62.0751], zoom: 7 },
+  { uf: 'SC', name: 'Santa Catarina', coords: [-27.2423, -50.2189], zoom: 8 },
+  { uf: 'SP', name: 'São Paulo', coords: [-22.1965, -48.7972], zoom: 7 },
+  { uf: 'SE', name: 'Sergipe', coords: [-10.5741, -37.3857], zoom: 9 },
+  { uf: 'TO', name: 'Tocantins', coords: [-10.1753, -48.2982], zoom: 7 },
+];
+
+const IBGE_API_BASE = 'https://servicodados.ibge.gov.br/api/v1/localidades';
+const ibgeCitiesCache = new Map<string, CityMetadata[]>();
+const simulatedCityCache = new Map<string, CrimeRecord[]>();
+
+const DEMO_NEIGHBORHOODS = [
+  'Centro',
+  'Jardim América',
+  'Bela Vista',
+  'Vila Nova',
+  'São José',
+  'Boa Vista',
+  'Santa Cruz',
+];
+
+const DEMO_TEMPLATES = [
+  { type: 'Furto', desc: '[Simulação] Registro demonstrativo de furto em via comercial.' },
+  { type: 'Roubo', desc: '[Simulação] Registro demonstrativo de subtração de aparelho celular.' },
+  { type: 'Lesão Corporal', desc: '[Simulação] Registro demonstrativo de ocorrência em área urbana.' },
+  { type: 'Furto', desc: '[Simulação] Registro demonstrativo de furto de veículo estacionado.' },
+  { type: 'Roubo', desc: '[Simulação] Registro demonstrativo de abordagem a transeunte.' },
+  { type: 'Homicídio', desc: '[Simulação] Registro estatístico demonstrativo para visualização.' },
+];
+
+function hashString(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+function generateSimulatedCityRecords(
+  cityName: string,
+  stateUf: string,
+  baseCoords: [number, number]
+): CrimeRecord[] {
+  const cacheKey = `${cityName.toLowerCase()}-${stateUf.toUpperCase()}`;
+  const cached = simulatedCityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const seed = hashString(cacheKey);
+  const years = [2021, 2022, 2023, 2024, 2025, 2026];
+  const records: CrimeRecord[] = [];
+
+  for (let i = 0; i < 14; i++) {
+    const s = hashString(`${cacheKey}-${i}`);
+    const template = DEMO_TEMPLATES[(seed + i) % DEMO_TEMPLATES.length];
+    const neighborhood = DEMO_NEIGHBORHOODS[(s + i) % DEMO_NEIGHBORHOODS.length];
+    const year = years[(s + i) % years.length];
+    const month = String((s % 10) + 1).padStart(2, '0');
+    const day = String((s % 25) + 1).padStart(2, '0');
+    const hour = String(s % 23).padStart(2, '0');
+    const minute = String(s % 59).padStart(2, '0');
+
+    const latOffset = (((s % 200) - 100) / 100) * 0.022;
+    const lngOffset = ((((s >> 3) % 200) - 100) / 100) * 0.022;
+
+    records.push({
+      id: `SIM-${stateUf}-${(seed % 9000) + 1000}-${i + 1}`,
+      type: template.type,
+      date: `${year}-${month}-${day}T${hour}:${minute}:00`,
+      city: cityName,
+      state: stateUf.toUpperCase(),
+      neighborhood,
+      location: `Área demonstrativa — ${neighborhood}, ${cityName} - ${stateUf.toUpperCase()}`,
+      description: template.desc,
+      source: 'Base Simulada de Demonstração (Município via API IBGE)',
+      coords: [
+        Number((baseCoords[0] + latOffset).toFixed(5)),
+        Number((baseCoords[1] + lngOffset).toFixed(5)),
+      ],
+      isSimulated: true,
+    });
+  }
+
+  simulatedCityCache.set(cacheKey, records);
+  return records;
+}
+
+function getBaseRecordsWithFlags(): CrimeRecord[] {
+  return crimeData.map((r) => ({ ...r, isSimulated: true }));
+}
 
 function filterRecordsLocally(records: CrimeRecord[], filters?: CrimeFilters): CrimeRecord[] {
   if (!filters) return records;
@@ -31,6 +156,13 @@ function filterRecordsLocally(records: CrimeRecord[], filters?: CrimeFilters): C
       : new Date();
 
   return records.filter((record) => {
+    if (
+      filters.state &&
+      filters.state !== 'all' &&
+      record.state.toLowerCase() !== filters.state.toLowerCase()
+    ) {
+      return false;
+    }
     if (
       filters.city &&
       filters.city !== 'all' &&
@@ -84,36 +216,97 @@ function filterRecordsLocally(records: CrimeRecord[], filters?: CrimeFilters): C
 }
 
 export const crimeService = {
+  getStatesMetadata(): StateMetadata[] {
+    return [...BRAZIL_STATES];
+  },
   async getAllRecords(): Promise<CrimeRecord[]> {
-    if (USE_REAL_API && API_BASE_URL) {
-      const response = await fetch(`${API_BASE_URL}/occurrences`);
-      if (!response.ok) throw new Error('Erro ao buscar ocorrências na API');
-      return response.json();
-    }
-    return Promise.resolve([...crimeData]);
+    const base = getBaseRecordsWithFlags();
+    const extraStates = BRAZIL_STATES.filter((s) => s.uf !== 'BA').slice(0, 8);
+    const nationalSamples = extraStates.flatMap((st) =>
+      generateSimulatedCityRecords(`Capital / Polo (${st.uf})`, st.uf, st.coords).slice(0, 3)
+    );
+    return [...base, ...nationalSamples];
   },
 
   async getFilteredRecords(filters?: CrimeFilters): Promise<CrimeRecord[]> {
+    const base = getBaseRecordsWithFlags();
+
+    if (filters?.city && filters.city !== 'all') {
+      const existingInBase = base.filter(
+        (r) => r.city.toLowerCase() === filters.city!.toLowerCase()
+      );
+      if (existingInBase.length > 0) {
+        return filterRecordsLocally(existingInBase, filters);
+      }
+
+      const uf = filters.state && filters.state !== 'all' ? filters.state : 'BR';
+      const stateMeta = BRAZIL_STATES.find(
+        (s) => s.uf.toLowerCase() === uf.toLowerCase()
+      );
+      const center = stateMeta ? stateMeta.coords : ([-14.235, -51.9253] as [number, number]);
+      const generated = generateSimulatedCityRecords(filters.city, uf, center);
+      return filterRecordsLocally(generated, filters);
+    }
+
+    if (filters?.state && filters.state !== 'all') {
+      const existingInState = base.filter(
+        (r) => r.state.toLowerCase() === filters.state!.toLowerCase()
+      );
+      if (existingInState.length > 0) {
+        return filterRecordsLocally(existingInState, filters);
+      }
+
+      const stateMeta = BRAZIL_STATES.find(
+        (s) => s.uf.toLowerCase() === filters.state!.toLowerCase()
+      );
+      if (stateMeta) {
+        const generated = generateSimulatedCityRecords(
+          stateMeta.name,
+          stateMeta.uf,
+          stateMeta.coords
+        );
+        return filterRecordsLocally(generated, filters);
+      }
+    }
+
     const all = await this.getAllRecords();
     return filterRecordsLocally(all, filters);
   },
 
-  async getCitiesMetadata(): Promise<CityMetadata[]> {
-    if (USE_REAL_API && API_BASE_URL) {
-      const response = await fetch(`${API_BASE_URL}/cities`);
-      if (!response.ok) throw new Error('Erro ao buscar metadados das cidades');
-      return response.json();
+  async getCitiesMetadata(stateUf?: string): Promise<CityMetadata[]> {
+    if (!stateUf || stateUf === 'all') {
+      return [...citiesMetadata];
     }
-    return Promise.resolve([...citiesMetadata]);
+
+    const uf = stateUf.toUpperCase();
+    const cached = ibgeCitiesCache.get(uf);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(`${IBGE_API_BASE}/estados/${uf}/municipios?orderBy=nome`);
+      if (!response.ok) throw new Error(`IBGE HTTP ${response.status}`);
+      const municipios: Array<{ nome: string }> = await response.json();
+      const stateMeta = BRAZIL_STATES.find((s) => s.uf === uf);
+      const baseCoords: [number, number] = stateMeta ? stateMeta.coords : [-14.235, -51.9253];
+
+      const mapped: CityMetadata[] = municipios.map((m) => {
+        const known = citiesMetadata.find(
+          (c) => c.name.toLowerCase() === m.nome.toLowerCase() && c.state === uf
+        );
+        if (known) return known;
+        return { name: m.nome, state: uf, coords: baseCoords, zoom: 12 };
+      });
+
+      ibgeCitiesCache.set(uf, mapped);
+      return mapped;
+    } catch {
+      return citiesMetadata.filter((c) => c.state === uf);
+    }
   },
 
-  async getNeighborhoodsByCity(city: string): Promise<string[]> {
-    const all = await this.getAllRecords();
-    const scoped =
-      !city || city === 'all'
-        ? all
-        : all.filter((r) => r.city.toLowerCase() === city.toLowerCase());
-    return Array.from(new Set(scoped.map((r) => r.neighborhood))).sort();
+  async getNeighborhoodsByCity(city: string, stateUf?: string): Promise<string[]> {
+    const records = await this.getFilteredRecords({ city, state: stateUf });
+    return Array.from(new Set(records.map((r) => r.neighborhood))).sort();
   },
 
   async getDataSourcesSummary(): Promise<DataSourceMetadata> {
@@ -123,6 +316,7 @@ export const crimeService = {
     ]);
 
     const uniqueNeighborhoods = new Set(records.map((r) => r.neighborhood)).size;
+    const uniqueStates = new Set(records.map((r) => r.state)).size;
     const sortedDates = records
       .map((r) => new Date(r.date))
       .filter((d) => !isNaN(d.getTime()))
@@ -142,9 +336,11 @@ export const crimeService = {
     return {
       totalRecords: records.length,
       totalCities: cities.length,
+      totalStates: uniqueStates,
       uniqueNeighborhoods,
       periodLabel,
       lastUpdateLabel,
+      coverageScope: 'Nacional (Municípios reais via API IBGE + ocorrências simuladas)',
     };
   },
 };
