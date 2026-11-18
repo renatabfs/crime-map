@@ -121,7 +121,6 @@ function App() {
                     : 'Vitória da Conquista';
                 handleConfirmSearch({
                   label: targetCity,
-                  type: 'city',
                   city: filters.city !== 'all' ? filters.city : undefined,
                   neighborhood:
                     filters.neighborhood !== 'all' ? filters.neighborhood : undefined,
