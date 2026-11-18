@@ -113,8 +113,8 @@ export default function AnalyticsPage({ filters }: AnalyticsPageProps) {
     }, [filters.city, filters.neighborhood, filters.crimeType]);
 
     const { currentRecords, previousRecords } = useMemo(() => {
-        const current: typeof CrimeRecord = [];
-        const previous: typeof CrimeRecord = [];
+        const current: CrimeRecord[] = [];
+        const previous: CrimeRecord[] = [];
 
         scopeRecords.forEach((rec) => {
             const bucket = classifyRecordPeriod(new Date(rec.date), filters.period);
