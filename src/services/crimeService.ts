@@ -122,7 +122,7 @@ function generateSimulatedCityRecords(
     const lngOffset = ((((s >> 3) % 200) - 100) / 100) * 0.022;
 
     records.push({
-      id: `SIM-${stateUf}-${(seed % 9000) + 1000}-${i + 1}`,
+      id: (seed % 900000) * 100 + i + 1,
       type: template.type,
       date: `${year}-${month}-${day}T${hour}:${minute}:00`,
       city: cityName,
