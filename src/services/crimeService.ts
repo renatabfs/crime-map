@@ -266,8 +266,9 @@ export const crimeService = {
     }
 
     if (filters?.state && filters.state !== 'all') {
+      const uf = filters.state.toUpperCase();
       const existingInState = base.filter(
-        (r) => r.state.toLowerCase() === filters.state!.toLowerCase()
+        (r) => r.state.toLowerCase() === uf.toLowerCase()
       );
       if (existingInState.length > 0) {
         return filterRecordsLocally(existingInState, filters);
