@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, Tooltip, ResponsiveContainer, BarChart, Bar, YAxis } from 'recharts';
 import { PieChart as PieIcon, TrendingUp, MapPin } from 'lucide-react';
-import { crimeService } from '../services/crimeService';
+import { crimeService, BRAZIL_STATES } from '../services/crimeService';
 import type { CrimeRecord } from '../services/crimeService';
 
 interface ChartsPanelProps {
@@ -16,6 +16,7 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
         let active = true;
         crimeService
             .getFilteredRecords({
+                state: filters.state,
                 city: filters.city,
                 neighborhood: filters.neighborhood,
                 period: filters.period,
@@ -65,7 +66,6 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
                 .map((year) => ({ year, crimes: byYear[year] }));
         }
 
-        // Quando todos os registros filtrados estão no mesmo ano/mês, agrupa por dia (DD/MM) para formar a linha
         const byDay: Record<string, { label: string; crimes: number }> = {};
         records.forEach((r) => {
             const d = new Date(r.date);
@@ -83,17 +83,83 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
             .map(([, item]) => ({ year: item.label, crimes: item.crimes }));
     }, [records, filters.period]);
 
-    const barData = useMemo(() => {
+    const { rankingTitle, barData } = useMemo(() => {
+        const hasState = Boolean(filters.state && filters.state !== 'all');
+        const hasCity = Boolean(filters.city && filters.city !== 'all');
+        const hasNeighborhood = Boolean(filters.neighborhood && filters.neighborhood !== 'all');
+
+        if (hasNeighborhood) {
+            const shifts: Record<string, number> = {
+                Madrugada: 0,
+                Manhã: 0,
+                Tarde: 0,
+                Noite: 0,
+            };
+
+            records.forEach((r) => {
+                const hour = new Date(r.date).getHours();
+                if (isNaN(hour)) return;
+                if (hour < 6) shifts['Madrugada'] += 1;
+                else if (hour < 12) shifts['Manhã'] += 1;
+                else if (hour < 18) shifts['Tarde'] += 1;
+                else shifts['Noite'] += 1;
+            });
+
+            return {
+                rankingTitle: `Ocorrências por Turno (${filters.neighborhood})`,
+                barData: Object.entries(shifts)
+                    .map(([name, crimes]) => ({ name, crimes }))
+                    .sort((a, b) => b.crimes - a.crimes),
+            };
+        }
+
+        if (hasCity) {
+            const counts: Record<string, number> = {};
+            records.forEach((r) => {
+                counts[r.neighborhood] = (counts[r.neighborhood] || 0) + 1;
+            });
+
+            return {
+                rankingTitle: 'Bairros com Mais Ocorrências',
+                barData: Object.entries(counts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([name, crimes]) => ({ name, crimes })),
+            };
+        }
+
+        if (hasState) {
+            const counts: Record<string, number> = {};
+            records.forEach((r) => {
+                counts[r.city] = (counts[r.city] || 0) + 1;
+            });
+
+            return {
+                rankingTitle: 'Cidades com Mais Ocorrências',
+                barData: Object.entries(counts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5)
+                    .map(([name, crimes]) => ({ name, crimes })),
+            };
+        }
+
         const counts: Record<string, number> = {};
         records.forEach((r) => {
-            counts[r.neighborhood] = (counts[r.neighborhood] || 0) + 1;
+            const stMeta = BRAZIL_STATES.find(
+                (s) => s.uf.toUpperCase() === r.state.toUpperCase()
+            );
+            const stateLabel = stMeta ? stMeta.name : r.state;
+            counts[stateLabel] = (counts[stateLabel] || 0) + 1;
         });
 
-        return Object.entries(counts)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
-            .map(([name, crimes]) => ({ name, crimes }));
-    }, [records]);
+        return {
+            rankingTitle: 'Estados com Mais Ocorrências',
+            barData: Object.entries(counts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([name, crimes]) => ({ name, crimes })),
+        };
+    }, [records, filters.state, filters.city, filters.neighborhood]);
 
     return (
         <div className="charts-column">
@@ -133,7 +199,7 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
             <div className="chart-card">
                 <div className="chart-header">
                     <MapPin size={18} color="#e12c2c" />
-                    <h3>Bairros Mais Afetados</h3>
+                    <h3>{rankingTitle}</h3>
                 </div>
                 <div className="chart-body" style={{ minHeight: '180px' }}>
                     <ResponsiveContainer width="100%" height="100%">

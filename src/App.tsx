@@ -24,7 +24,8 @@ function App() {
   });
 
   const defaultFilters = {
-    city: 'Vitória da Conquista',
+    state: 'all',
+    city: 'all',
     neighborhood: 'all',
     period: '5-years',
     crimeType: 'all',
