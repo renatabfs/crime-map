@@ -221,10 +221,27 @@ export const crimeService = {
   },
   async getAllRecords(): Promise<CrimeRecord[]> {
     const base = getBaseRecordsWithFlags();
-    const extraStates = BRAZIL_STATES.filter((s) => s.uf !== 'BA').slice(0, 8);
-    const nationalSamples = extraStates.flatMap((st) =>
-      generateSimulatedCityRecords(`Capital / Polo (${st.uf})`, st.uf, st.coords).slice(0, 3)
-    );
+    const featuredStates: Array<{ uf: string; sampleCount: number }> = [
+      { uf: 'SP', sampleCount: 11 },
+      { uf: 'RJ', sampleCount: 9 },
+      { uf: 'MG', sampleCount: 8 },
+      { uf: 'CE', sampleCount: 7 },
+      { uf: 'PE', sampleCount: 6 },
+      { uf: 'PR', sampleCount: 5 },
+      { uf: 'RS', sampleCount: 4 },
+      { uf: 'GO', sampleCount: 3 },
+      { uf: 'PA', sampleCount: 3 },
+      { uf: 'AM', sampleCount: 2 },
+    ];
+    const nationalSamples = featuredStates.flatMap(({ uf, sampleCount }) => {
+      const st = BRAZIL_STATES.find((s) => s.uf === uf);
+      if (!st) return [];
+      return generateSimulatedCityRecords(`Polo Regional (${st.uf})`, st.uf, st.coords).slice(
+        0,
+        sampleCount
+      );
+    });
+
     return [...base, ...nationalSamples];
   },
 
@@ -256,17 +273,28 @@ export const crimeService = {
         return filterRecordsLocally(existingInState, filters);
       }
 
-      const stateMeta = BRAZIL_STATES.find(
-        (s) => s.uf.toLowerCase() === filters.state!.toLowerCase()
-      );
-      if (stateMeta) {
-        const generated = generateSimulatedCityRecords(
-          stateMeta.name,
-          stateMeta.uf,
-          stateMeta.coords
+      const stateMeta = BRAZIL_STATES.find((s) => s.uf === uf);
+      const stateCities = await this.getCitiesMetadata(uf);
+
+      const topCities = stateCities
+        .filter((c) => !existingInState.some((r) => r.city.toLowerCase() === c.name.toLowerCase()))
+        .slice(0, 6);
+
+      const generatedAcrossCities = topCities.flatMap((cityItem, idx) => {
+        const baseLat = stateMeta ? stateMeta.coords[0] : cityItem.coords[0];
+        const baseLng = stateMeta ? stateMeta.coords[1] : cityItem.coords[1];
+        const spreadCoords: [number, number] = [
+          baseLat + ((idx % 3) - 1) * 0.45,
+          baseLng + (Math.floor(idx / 3) - 0.5) * 0.55,
+        ];
+        const countForCity = Math.max(3, 11 - idx * 2);
+        return generateSimulatedCityRecords(cityItem.name, uf, spreadCoords).slice(
+          0,
+          countForCity
         );
-        return filterRecordsLocally(generated, filters);
-      }
+      });
+
+      return filterRecordsLocally([...existingInState, ...generatedAcrossCities], filters);
     }
 
     const all = await this.getAllRecords();
