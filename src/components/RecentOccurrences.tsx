@@ -18,11 +18,12 @@ export default function RecentOccurrences({ filters, searchQuery = '', onSelectO
     let active = true;
     crimeService
       .getFilteredRecords({
+        state: filters.state,
         city: filters.city,
         neighborhood: filters.neighborhood,
         period: filters.period,
         crimeType: filters.crimeType,
-        searchQuery,
+        searchQuery
       })
       .then((data) => {
         if (active) setOccurrences(data);
@@ -69,7 +70,7 @@ export default function RecentOccurrences({ filters, searchQuery = '', onSelectO
                 title="Clique para ver detalhes da ocorrência">
                 <td><span className="status-dot"></span>{formatDate(occ.date)}</td>
                 <td>{occ.type}</td>
-                <td>{occ.neighborhood}</td>
+                <td>{occ.neighborhood} — {occ.city}/{occ.state}</td>
                 <td>{occ.description}</td>
               </tr>
             ))}

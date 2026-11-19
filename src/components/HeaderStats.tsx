@@ -19,6 +19,7 @@ export default function HeaderStats({ filters }: HeaderStatsProps) {
     let active = true;
     crimeService
       .getFilteredRecords({
+        state: filters.state,
         city: filters.city,
         neighborhood: filters.neighborhood,
         period: filters.period,
@@ -62,13 +63,13 @@ export default function HeaderStats({ filters }: HeaderStatsProps) {
     {
       id: 3,
       title: 'Furtos e roubos',
-      value: counts.violence.toLocaleString('pt-BR'),
+      value: counts.theftAndRobbery.toLocaleString('pt-BR'),
       icon: <Car size={28} className="icon-gray" />,
     },
     {
       id: 4,
       title: 'Outros crimes',
-      value: counts.violence.toLocaleString('pt-BR'),
+      value: counts.others.toLocaleString('pt-BR'),
       icon: <Shield size={28} className="icon-green" />,
     },
   ];
