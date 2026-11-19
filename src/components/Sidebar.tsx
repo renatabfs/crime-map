@@ -164,13 +164,20 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
             <label>
               <MapPin size={16} /> Cidade
             </label>
-            <select name="city" value={localFilters.city} onChange={handleChange}>
-              <option value="all">Todas as cidades</option>
-              {availableCities.map((c) => (
-                <option key={`${c.name}-${c.state}`} value={c.name}>
-                  {c.name} ({c.state})
-                </option>
-              ))}
+            <select name="city" value={!localFilters.state || localFilters.state === 'all' ? 'all' : localFilters.city} onChange={handleChange} disabled={!localFilters.state || localFilters.state === 'all'} style={{
+              opacity: !localFilters.state || localFilters.state === 'all' ? 0.6 : 1,
+              cursor: !localFilters.state || localFilters.state === 'all' ? 'not-allowed' : 'pointer',
+            }}>
+              <option value="all">{!localFilters.state || localFilters.state === 'all'
+                ? 'Todas as cidades (selecione um estado)'
+                : 'Todas as cidades do estado'}</option>
+              {localFilters.state &&
+                localFilters.state !== 'all' &&
+                availableCities.map((c) => (
+                  <option key={`${c.name}-${c.state}`} value={c.name}>
+                    {c.name} ({c.state})
+                  </option>
+                ))}
             </select>
           </div>
 
