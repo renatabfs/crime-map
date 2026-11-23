@@ -47,6 +47,16 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
   const supportsPopulationRate =
     selectedIndicatorMeta?.comparisonMethod === 'population_per_100k';
 
+  const supportsMunicipalities =
+    selectedIndicatorMeta?.granularity === 'state_and_municipality';
+
+  const hasSelectedState = Boolean(localFilters.state && localFilters.state !== 'all');
+
+  const availableMunicipalities = useMemo(() => {
+    if (!hasSelectedState) return [];
+    return crimeService.getOfficialMunicipalitiesByState(localFilters.state);
+  }, [hasSelectedState, localFilters.state]);
+
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     if (name === 'state') {
@@ -56,17 +66,51 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
         city: 'all',
         neighborhood: 'all',
       });
+    } else if (name === 'municipalityCode') {
+      if (value === 'all') {
+        setLocalFilters({
+          ...localFilters,
+          municipalityCode: 'all',
+          city: 'all',
+          neighborhood: 'all',
+        });
+      } else {
+        const selectedMun = availableMunicipalities.find((m) => m.ibgeCode === value);
+        setLocalFilters({
+          ...localFilters,
+          municipalityCode: selectedMun ? selectedMun.ibgeCode : 'all',
+          city: selectedMun ? selectedMun.name : 'all',
+          neighborhood: 'all',
+        });
+      }
     } else if (name === 'indicatorId') {
       const nextMeta = indicatorsCatalog.find((ind) => ind.id === value);
       const nextMode =
         nextMeta?.comparisonMethod === 'population_per_100k'
           ? localFilters.metricMode || 'rate'
           : 'absolute';
-      setLocalFilters({
-        ...localFilters,
-        indicatorId: value,
-        metricMode: nextMode,
-      });
+      const nextSupportsMun = nextMeta?.granularity === 'state_and_municipality';
+
+      if (!nextSupportsMun || !hasSelectedState) {
+        setLocalFilters({
+          ...localFilters,
+          indicatorId: value,
+          metricMode: nextMode,
+          municipalityCode: 'all',
+          city: 'all',
+        });
+      } else {
+        const currentMun = availableMunicipalities.find(
+          (m) => m.ibgeCode === localFilters.municipalityCode
+        );
+        setLocalFilters({
+          ...localFilters,
+          indicatorId: value,
+          metricMode: nextMode,
+          municipalityCode: currentMun ? currentMun.ibgeCode : 'all',
+          city: currentMun ? currentMun.name : 'all',
+        });
+      }
     } else if (name === 'year') {
       setLocalFilters({
         ...localFilters,
@@ -165,6 +209,39 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
               ))}
             </select>
           </div>
+          {hasSelectedState && (
+            <div className="filter-group">
+              <label>
+                <MapPin size={16} /> Município (IBGE / Sinesp)
+              </label>
+              <select
+                name="municipalityCode"
+                value={
+                  supportsMunicipalities
+                    ? localFilters.municipalityCode || 'all'
+                    : 'all'
+                }
+                onChange={handleChange}
+                disabled={!supportsMunicipalities}
+                style={{
+                  opacity: !supportsMunicipalities ? 0.65 : 1,
+                  cursor: !supportsMunicipalities ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <option value="all">
+                  {!supportsMunicipalities
+                    ? 'Disponível apenas por UF neste indicador'
+                    : `Todos os municípios (${availableMunicipalities.length})`}
+                </option>
+                {supportsMunicipalities &&
+                  availableMunicipalities.map((mun) => (
+                    <option key={mun.ibgeCode} value={mun.ibgeCode}>
+                      {mun.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
           <div className="filter-group">
             <label>
               <Shield size={16} /> Indicador (Sinesp VDE)
