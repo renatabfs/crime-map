@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Home,
   BarChart2,
@@ -9,10 +9,10 @@ import {
   Shield,
   Fingerprint,
   SlidersHorizontal,
+  Scale,
   X,
 } from 'lucide-react';
 import { crimeService, BRAZIL_STATES } from '../services/crimeService';
-import type { CityMetadata } from '../services/crimeService';
 
 interface SidebarProps {
   filters: any;
@@ -31,30 +31,21 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
     setLocalFilters(filters);
   }, [filters]);
 
-  const [availableCities, setAvailableCities] = useState<CityMetadata[]>([]);
-  const [availableNeighborhoods, setAvailableNeighborhoods] = useState<string[]>([]);
+  const indicatorsCatalog = useMemo(
+    () => crimeService.getOfficialIndicatorsCatalog(),
+    []
+  );
 
-  useEffect(() => {
-    let active = true;
-    crimeService.getCitiesMetadata(localFilters.state).then((list) => {
-      if (active) setAvailableCities(list);
-    });
-    return () => {
-      active = false;
-    };
-  }, [localFilters.state]);
+  const selectedIndicatorMeta = useMemo(
+    () =>
+      indicatorsCatalog.find(
+        (ind) => ind.id === (localFilters.indicatorId || 'homicidio-doloso')
+      ) ?? indicatorsCatalog[0],
+    [indicatorsCatalog, localFilters.indicatorId]
+  );
 
-  useEffect(() => {
-    let active = true;
-    crimeService
-      .getNeighborhoodsByCity(localFilters.city, localFilters.state)
-      .then((list) => {
-        if (active) setAvailableNeighborhoods(list);
-      });
-    return () => {
-      active = false;
-    };
-  }, [localFilters.city, localFilters.state]);
+  const supportsPopulationRate =
+    selectedIndicatorMeta?.comparisonMethod === 'population_per_100k';
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -65,8 +56,23 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
         city: 'all',
         neighborhood: 'all',
       });
-    } else if (name === 'city') {
-      setLocalFilters({ ...localFilters, city: value, neighborhood: 'all' });
+    } else if (name === 'indicatorId') {
+      const nextMeta = indicatorsCatalog.find((ind) => ind.id === value);
+      const nextMode =
+        nextMeta?.comparisonMethod === 'population_per_100k'
+          ? localFilters.metricMode || 'rate'
+          : 'absolute';
+      setLocalFilters({
+        ...localFilters,
+        indicatorId: value,
+        metricMode: nextMode,
+      });
+    } else if (name === 'year') {
+      setLocalFilters({
+        ...localFilters,
+        year: Number(value),
+        period: value,
+      });
     } else {
       setLocalFilters({ ...localFilters, [name]: value });
     }
@@ -144,17 +150,16 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
         <div className="filters-section">
           <div className="filter-group">
             <label>
-              <MapPin size={16} /> Estado (UF)
+              <Shield size={16} /> Indicador (Sinesp VDE)
             </label>
             <select
-              name="state"
-              value={localFilters.state || 'all'}
+              name="indicatorId"
+              value={localFilters.indicatorId || 'homicidio-doloso'}
               onChange={handleChange}
             >
-              <option value="all">Todo o Brasil (27 UFs)</option>
-              {BRAZIL_STATES.map((st) => (
-                <option key={st.uf} value={st.uf}>
-                  {st.name} ({st.uf})
+              {indicatorsCatalog.map((ind) => (
+                <option key={ind.id} value={ind.id}>
+                  {ind.label} ({ind.unitLabel})
                 </option>
               ))}
             </select>
@@ -162,72 +167,37 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
 
           <div className="filter-group">
             <label>
-              <MapPin size={16} /> Cidade
-            </label>
-            <select name="city" value={!localFilters.state || localFilters.state === 'all' ? 'all' : localFilters.city} onChange={handleChange} disabled={!localFilters.state || localFilters.state === 'all'} style={{
-              opacity: !localFilters.state || localFilters.state === 'all' ? 0.6 : 1,
-              cursor: !localFilters.state || localFilters.state === 'all' ? 'not-allowed' : 'pointer',
-            }}>
-              <option value="all">{!localFilters.state || localFilters.state === 'all'
-                ? 'Todas as cidades (selecione um estado)'
-                : 'Todas as cidades do estado'}</option>
-              {localFilters.state &&
-                localFilters.state !== 'all' &&
-                availableCities.map((c) => (
-                  <option key={`${c.name}-${c.state}`} value={c.name}>
-                    {c.name} ({c.state})
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>
-              <MapPin size={16} /> Bairro
+              <Scale size={16} /> Métrica de comparação
             </label>
             <select
-              name="neighborhood"
-              value={localFilters.neighborhood || 'all'}
+              name="metricMode"
+              value={supportsPopulationRate ? localFilters.metricMode || 'rate' : 'absolute'}
               onChange={handleChange}
+              disabled={!supportsPopulationRate}
+              style={{
+                opacity: !supportsPopulationRate ? 0.65 : 1,
+                cursor: !supportsPopulationRate ? 'not-allowed' : 'pointer',
+              }}
             >
-              <option value="all">Todos os bairros</option>
-              {availableNeighborhoods.map((neigh) => (
-                <option key={neigh} value={neigh}>
-                  {neigh}
-                </option>
-              ))}
+              {supportsPopulationRate && (
+                <option value="rate">Taxa por 100 mil hab. (IBGE)</option>
+              )}
+              <option value="absolute">
+                Quantidade absoluta ({selectedIndicatorMeta?.unitLabel || 'total'})
+              </option>
             </select>
           </div>
 
           <div className="filter-group">
             <label>
-              <Calendar size={16} /> Período
-            </label>
-            <select name="period" value={localFilters.period} onChange={handleChange}>
-              <option value="30-days">Últimos 30 dias</option>
-              <option value="6-months">Últimos 6 meses</option>
-              <option value="1-year">Último ano</option>
-              <option value="5-years">Últimos 5 anos</option>
-              <option value="2026">Ano de 2026</option>
-              <option value="2025">Ano de 2025</option>
-              <option value="2024">Ano de 2024</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label>
-              <Shield size={16} /> Tipo de ocorrência
+              <Calendar size={16} /> Ano-base (Sinesp VDE)
             </label>
             <select
-              name="crimeType"
-              value={localFilters.crimeType}
+              name="year"
+              value={String(localFilters.year || 2025)}
               onChange={handleChange}
             >
-              <option value="all">Todos os tipos</option>
-              <option value="Roubo">Roubo</option>
-              <option value="Furto">Furto</option>
-              <option value="Lesão Corporal">Lesão Corporal</option>
-              <option value="Homicídio">Homicídio</option>
+              <option value="2025">2025 (Base oficial fechada)</option>
             </select>
           </div>
 
@@ -239,9 +209,9 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
 
       <div className="sidebar-quote">
         <p>
-          “Dados que revelam
+        “Dados oficiais que revelam
           <br />
-          uma cidade mais segura.”
+          o panorama da segurança no Brasil.”
         </p>
       </div>
 
