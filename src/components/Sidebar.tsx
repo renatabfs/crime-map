@@ -150,6 +150,23 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
         <div className="filters-section">
           <div className="filter-group">
             <label>
+              <MapPin size={16} /> Estado (UF)
+            </label>
+            <select
+              name="state"
+              value={localFilters.state || 'all'}
+              onChange={handleChange}
+            >
+              <option value="all">Todo o Brasil (27 UFs)</option>
+              {BRAZIL_STATES.map((st) => (
+                <option key={st.uf} value={st.uf}>
+                  {st.name} ({st.uf})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="filter-group">
+            <label>
               <Shield size={16} /> Indicador (Sinesp VDE)
             </label>
             <select
@@ -209,7 +226,7 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
 
       <div className="sidebar-quote">
         <p>
-        “Dados oficiais que revelam
+          “Dados oficiais que revelam
           <br />
           o panorama da segurança no Brasil.”
         </p>
