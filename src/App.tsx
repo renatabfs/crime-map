@@ -25,6 +25,7 @@ function App() {
 
   const defaultFilters = {
     state: 'all',
+    municipalityCode: 'all',
     indicatorId: 'homicidio-doloso',
     metricMode: 'rate' as 'rate' | 'absolute',
     year: 2025,
@@ -51,6 +52,7 @@ function App() {
     setConfirmedSearch(selection);
     setFilters((prev) => ({
       ...prev,
+      municipalityCode: selection.city ? prev.municipalityCode : 'all',
       city: selection.city ? selection.city : 'all',
       neighborhood: selection.neighborhood ? selection.neighborhood : 'all',
       crimeType: selection.crimeType ? selection.crimeType : 'all',
