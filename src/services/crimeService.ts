@@ -2,9 +2,15 @@ import { crimeData, citiesMetadata } from '../data/mockData';
 import type { CrimeRecord as BaseCrimeRecord, CityMetadata } from '../data/mockData';
 import rawStateIndicators from '../data/stateIndicators.json';
 import rawStatePopulation from '../data/statePopulation.json';
+import rawMunicipalityPopulation from '../data/municipalityPopulation.json';
 import type {
   StateCrimeIndicatorEntry,
   StatePopulationEntry,
+  MunicipalityPopulationEntry,
+  MunicipalityCrimeIndicatorEntry,
+  EnrichedMunicipalityIndicator,
+  MunicipalityRankingItem,
+  OfficialMunicipalitySummaryStats,
   IndicatorCatalogMetadata,
   OfficialIndicatorFilters,
   OfficialSummaryStats,
@@ -16,8 +22,14 @@ export interface CrimeRecord extends BaseCrimeRecord {
 }
 
 export type {
-  CityMetadata, StateCrimeIndicatorEntry,
+  CityMetadata,
+  StateCrimeIndicatorEntry,
   StatePopulationEntry,
+  MunicipalityPopulationEntry,
+  MunicipalityCrimeIndicatorEntry,
+  EnrichedMunicipalityIndicator,
+  MunicipalityRankingItem,
+  OfficialMunicipalitySummaryStats,
   IndicatorCatalogMetadata,
   OfficialIndicatorFilters,
   OfficialSummaryStats,
@@ -26,6 +38,23 @@ export type {
 
 const OFFICIAL_STATE_INDICATORS = rawStateIndicators as StateCrimeIndicatorEntry[];
 const OFFICIAL_STATE_POPULATIONS = rawStatePopulation as StatePopulationEntry[];
+const OFFICIAL_MUNICIPALITY_POPULATIONS =
+  rawMunicipalityPopulation as MunicipalityPopulationEntry[];
+
+const MUNICIPALITY_BY_IBGE_CODE = new Map<string, MunicipalityPopulationEntry>(
+  OFFICIAL_MUNICIPALITY_POPULATIONS.map((m) => [m.ibgeCode, m])
+);
+
+let cachedMunicipalityIndicatorsPromise: Promise<MunicipalityCrimeIndicatorEntry[]> | null = null;
+
+function loadOfficialMunicipalityIndicators(): Promise<MunicipalityCrimeIndicatorEntry[]> {
+  if (!cachedMunicipalityIndicatorsPromise) {
+    cachedMunicipalityIndicatorsPromise = import('../data/municipalityIndicators.json').then(
+      (mod) => mod.default as MunicipalityCrimeIndicatorEntry[]
+    );
+  }
+  return cachedMunicipalityIndicatorsPromise;
+}
 
 export interface CrimeFilters {
   state?: string;
@@ -340,10 +369,10 @@ export const crimeService = {
     const totalValue =
       validRows.length > 0
         ? Number(
-            validRows
-              .reduce((acc, r) => acc + (r.value as number), 0)
-              .toFixed(meta.unit === 'kg' ? 3 : 0)
-          )
+          validRows
+            .reduce((acc, r) => acc + (r.value as number), 0)
+            .toFixed(meta.unit === 'kg' ? 3 : 0)
+        )
         : null;
 
     const validPopulation =
@@ -418,6 +447,149 @@ export const crimeService = {
         effectiveMode,
       }))
       .sort((a, b) => b.metricValue - a.metricValue);
+  },
+  indicatorSupportsMunicipalities(indicatorId: string): boolean {
+    const meta = this.getOfficialIndicatorsCatalog().find((c) => c.id === indicatorId);
+    return meta?.granularity === 'state_and_municipality';
+  },
+
+  getOfficialMunicipalitiesByState(stateUf: string): MunicipalityPopulationEntry[] {
+    if (!stateUf || stateUf === 'all') return [];
+    const normalizedUf = stateUf.trim().toUpperCase();
+    return OFFICIAL_MUNICIPALITY_POPULATIONS.filter((m) => m.uf === normalizedUf);
+  },
+
+  getOfficialMunicipalityByCode(ibgeCode: string): MunicipalityPopulationEntry | null {
+    return MUNICIPALITY_BY_IBGE_CODE.get(ibgeCode.trim()) ?? null;
+  },
+
+  async getOfficialMunicipalityIndicators(params: {
+    uf?: string;
+    ibgeCode?: string;
+    indicatorId: string;
+  }): Promise<EnrichedMunicipalityIndicator[]> {
+    const meta = this.getOfficialIndicatorsCatalog().find(
+      (c) => c.id === params.indicatorId
+    );
+    if (!meta || meta.granularity !== 'state_and_municipality') {
+      return [];
+    }
+
+    const allMunicipal = await loadOfficialMunicipalityIndicators();
+    const normalizedUf = params.uf && params.uf !== 'all' ? params.uf.trim().toUpperCase() : null;
+    const normalizedCode =
+      params.ibgeCode && params.ibgeCode !== 'all' ? params.ibgeCode.trim() : null;
+
+    const results: EnrichedMunicipalityIndicator[] = [];
+    for (const row of allMunicipal) {
+      if (row.indicatorId !== params.indicatorId) continue;
+      if (normalizedUf && row.uf !== normalizedUf) continue;
+      if (normalizedCode && row.ibgeCode !== normalizedCode) continue;
+
+      const munMeta = MUNICIPALITY_BY_IBGE_CODE.get(row.ibgeCode);
+      if (!munMeta) continue;
+
+      results.push({
+        ...row,
+        municipalityName: munMeta.name,
+        population: munMeta.population,
+        unit: meta.unit,
+        unitLabel: meta.unitLabel,
+        comparisonMethod: meta.comparisonMethod,
+      });
+    }
+
+    return results;
+  },
+
+  async getOfficialMunicipalityRanking(
+    stateUf: string,
+    indicatorId: string,
+    mode: MetricDisplayMode = 'rate'
+  ): Promise<MunicipalityRankingItem[]> {
+    if (!stateUf || stateUf === 'all') return [];
+
+    const rows = await this.getOfficialMunicipalityIndicators({
+      uf: stateUf,
+      indicatorId,
+    });
+    const first = rows[0];
+    if (!first) return [];
+
+    const effectiveMode: MetricDisplayMode =
+      first.comparisonMethod === 'population_per_100k' ? mode : 'absolute';
+
+    return rows
+      .filter((r) => {
+        if (r.value === null) return false;
+        if (effectiveMode === 'rate' && r.ratePer100k === null) return false;
+        return true;
+      })
+      .map((r) => ({
+        ibgeCode: r.ibgeCode,
+        uf: r.uf,
+        municipalityName: r.municipalityName,
+        value: r.value as number,
+        ratePer100k: r.ratePer100k,
+        population: r.population,
+        metricValue:
+          effectiveMode === 'rate'
+            ? (r.ratePer100k as number)
+            : (r.value as number),
+        unitLabel:
+          effectiveMode === 'rate' ? 'por 100 mil hab.' : r.unitLabel,
+        effectiveMode,
+      }))
+      .sort((a, b) => b.metricValue - a.metricValue);
+  },
+
+  async getOfficialMunicipalitySummary(
+    ibgeCode: string,
+    indicatorId: string,
+    mode: MetricDisplayMode = 'rate'
+  ): Promise<OfficialMunicipalitySummaryStats> {
+    const meta =
+      this.getOfficialIndicatorsCatalog().find((c) => c.id === indicatorId) ?? null;
+    const munMeta = this.getOfficialMunicipalityByCode(ibgeCode);
+
+    if (!meta || !munMeta || meta.granularity !== 'state_and_municipality') {
+      return {
+        indicator: meta,
+        municipality: munMeta,
+        value: null,
+        ratePer100k: null,
+        unit: meta?.unit ?? null,
+        unitLabel: meta?.unitLabel ?? '',
+        comparisonMethod: meta?.comparisonMethod ?? null,
+        stateRankPosition: null,
+        stateRankedTotalCount: 0,
+      };
+    }
+
+    const [munRow] = await this.getOfficialMunicipalityIndicators({
+      uf: munMeta.uf,
+      ibgeCode: munMeta.ibgeCode,
+      indicatorId,
+    });
+
+    const ranking = await this.getOfficialMunicipalityRanking(
+      munMeta.uf,
+      indicatorId,
+      mode
+    );
+    const rankIndex = ranking.findIndex((item) => item.ibgeCode === munMeta.ibgeCode);
+
+    return {
+      indicator: meta,
+      municipality: munMeta,
+      value: munRow ? munRow.value : null,
+      ratePer100k: munRow ? munRow.ratePer100k : null,
+      unit: meta.unit,
+      unitLabel: meta.unitLabel,
+      comparisonMethod: meta.comparisonMethod,
+      stateRankPosition: rankIndex >= 0 ? rankIndex + 1 : null,
+      stateRankedTotalCount: ranking.length,
+    };
   },
 
   async getAllRecords(): Promise<CrimeRecord[]> {
