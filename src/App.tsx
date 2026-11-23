@@ -25,9 +25,12 @@ function App() {
 
   const defaultFilters = {
     state: 'all',
+    indicatorId: 'homicidio-doloso',
+    metricMode: 'rate' as 'rate' | 'absolute',
+    year: 2025,
     city: 'all',
     neighborhood: 'all',
-    period: '5-years',
+    period: '2025',
     crimeType: 'all',
   };
 
