@@ -16,12 +16,12 @@ export interface IndicatorCatalogEntry {
   rawEventName: string;
   label: string;
   category:
-    | 'letal-violento'
-    | 'dignidade-sexual'
-    | 'patrimonio'
-    | 'drogas-armas-produtividade'
-    | 'desaparecidos-localizados'
-    | 'transito-outros';
+  | 'letal-violento'
+  | 'dignidade-sexual'
+  | 'patrimonio'
+  | 'drogas-armas-produtividade'
+  | 'desaparecidos-localizados'
+  | 'transito-outros';
   unit: MetricUnit;
   unitLabel: string;
   scope: 'Estadual';
@@ -65,10 +65,68 @@ export interface StateCrimeIndicatorEntry {
   source: 'MJSP / Sinesp VDE (BancoVDE 2025.xlsx)';
 }
 
+export interface MunicipalityPopulationEntry {
+  ibgeCode: string;
+  uf: string;
+  name: string;
+  population: number;
+}
+
+export interface MunicipalityCrimeIndicatorEntry {
+  ibgeCode: string;
+  uf: string;
+  indicatorId: string;
+  value: number | null;
+  ratePer100k: number | null;
+}
+
 const IBGE_POP_API_URL =
   'https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]';
 
+const IBGE_MUN_POP_API_URL =
+  'https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N6[all]';
+
 const EXPECTED_NATIONAL_POPULATION_2025 = 213_421_037;
+const EXPECTED_MUNICIPALITIES_COUNT = 5_571;
+
+function normalizeMunicipalityName(rawName: string): string {
+  return rawName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/['’`-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+const MUNICIPALITY_NAME_ALIASES: Record<string, string> = {
+  'BA::MUQUEM DE SAO FRANCISCO': 'BA::MUQUEM DO SAO FRANCISCO',
+  'MG::BARAO DE MONTE ALTO': 'MG::BARAO DO MONTE ALTO',
+  'MG::BRASOPOLIS': 'MG::BRAZOPOLIS',
+  'MG::SAO THOME DAS LETRAS': 'MG::SAO TOME DAS LETRAS',
+  'MT::POXOREO': 'MT::POXOREU',
+  'MT::SANTO ANTONIO DO LEVERGER': 'MT::SANTO ANTONIO DE LEVERGER',
+  'PA::ELDORADO DOS CARAJAS': 'PA::ELDORADO DO CARAJAS',
+  'PA::SANTA ISABEL DO PARA': 'PA::SANTA IZABEL DO PARA',
+  'PB::SAO DOMINGOS DE POMBAL': 'PB::SAO DOMINGOS',
+  'PB::SERIDO': 'PB::SAO VICENTE DO SERIDO',
+  'PE::BELEM DE SAO FRANCISCO': 'PE::BELEM DO SAO FRANCISCO',
+  'PE::IGUARACI': 'PE::IGUARACY',
+  'RN::ACU': 'RN::ASSU',
+  'RN::ARES': 'RN::AREZ',
+  'RN::AUGUSTO SEVERO': 'RN::CAMPO GRANDE',
+  'RR::SAO LUIZ': 'RR::SAO LUIZ DO ANAUA',
+  'RS::VESPAZIANO CORREA': 'RS::VESPASIANO CORREA',
+  'SC::PICARRAS': 'SC::BALNEARIO PICARRAS',
+  'SC::PRESIDENTE CASTELO BRANCO': 'SC::PRESIDENTE CASTELLO BRANCO',
+  'SE::GRACHO CARDOSO': 'SE::GRACCHO CARDOSO',
+  'SP::EMBU': 'SP::EMBU DAS ARTES',
+  'SP::FLORINIA': 'SP::FLORINEA',
+  'SP::MOJI MIRIM': 'SP::MOGI MIRIM',
+  'SP::SAO LUIS DO PARAITINGA': 'SP::SAO LUIZ DO PARAITINGA',
+  'TO::COUTO DE MAGALHAES': 'TO::COUTO MAGALHAES',
+  'TO::SAO VALERIO DA NATIVIDADE': 'TO::SAO VALERIO',
+};
 
 const IBGE_UF_BY_CODE: Record<string, { uf: string; name: string }> = {
   '11': { uf: 'RO', name: 'Rondônia' },
@@ -482,6 +540,128 @@ async function fetchAndValidateIbgePopulation2025(): Promise<StatePopulationEntr
   return entries;
 }
 
+async function fetchAndValidateIbgeMunicipalities2025(
+  statePopulations: StatePopulationEntry[]
+): Promise<{
+  municipalities: MunicipalityPopulationEntry[];
+  byNormalizedKey: Map<string, MunicipalityPopulationEntry>;
+}> {
+  console.log(
+    '1b/4 Consultando API oficial do SIDRA/IBGE (Tabela 6579, Variável 9324, 2025, Nível N6 - Municípios)...'
+  );
+  const response = await fetch(IBGE_MUN_POP_API_URL);
+  if (!response.ok) {
+    throw new Error(
+      `Falha ao consultar API municipal do IBGE: HTTP ${response.status} ${response.statusText}`
+    );
+  }
+
+  const payload = (await response.json()) as Array<{
+    resultados: Array<{
+      series: Array<{
+        localidade: { id: string; nome: string };
+        serie: Record<string, string>;
+      }>;
+    }>;
+  }>;
+
+  const series = payload?.[0]?.resultados?.[0]?.series;
+  if (!Array.isArray(series) || series.length === 0) {
+    throw new Error('Estrutura inesperada na resposta municipal do IBGE: séries vazias.');
+  }
+
+  const seenCodes = new Set<string>();
+  const byNormalizedKey = new Map<string, MunicipalityPopulationEntry>();
+  const municipalities: MunicipalityPopulationEntry[] = [];
+  const sumByUf = new Map<string, number>();
+
+  for (const item of series) {
+    const ibgeCode = String(item.localidade.id).trim();
+    if (!/^\d{7}$/.test(ibgeCode)) {
+      throw new Error(`Código municipal IBGE inválido: "${ibgeCode}"`);
+    }
+
+    const stateCode = ibgeCode.slice(0, 2);
+    const ufMeta = IBGE_UF_BY_CODE[stateCode];
+    if (!ufMeta) {
+      throw new Error(`Prefixo de UF desconhecido no código municipal "${ibgeCode}"`);
+    }
+
+    const rawLocName = item.localidade.nome.trim();
+    const suffixPattern = new RegExp(`\\s*-\\s*${ufMeta.uf}$`, 'i');
+    const cleanName = rawLocName.replace(suffixPattern, '').trim();
+
+    const rawPop = item.serie?.['2025'];
+    if (!rawPop || !/^\d+$/.test(rawPop.trim())) {
+      throw new Error(
+        `População municipal ausente ou inválida para ${cleanName}/${ufMeta.uf} (${ibgeCode}): "${rawPop}"`
+      );
+    }
+
+    const population = Number.parseInt(rawPop.trim(), 10);
+    if (!Number.isFinite(population) || population <= 0) {
+      throw new Error(
+        `População municipal inválida (<= 0) para ${cleanName}/${ufMeta.uf}: ${population}`
+      );
+    }
+
+    if (seenCodes.has(ibgeCode)) {
+      throw new Error(`Código IBGE municipal duplicado: ${ibgeCode}`);
+    }
+    seenCodes.add(ibgeCode);
+
+    const normKey = `${ufMeta.uf}::${normalizeMunicipalityName(cleanName)}`;
+    if (byNormalizedKey.has(normKey)) {
+      throw new Error(
+        `Chave normalizada municipal ambígua no IBGE dentro da mesma UF: "${normKey}"`
+      );
+    }
+
+    const entry: MunicipalityPopulationEntry = {
+      ibgeCode,
+      uf: ufMeta.uf,
+      name: cleanName,
+      population,
+    };
+
+    municipalities.push(entry);
+    byNormalizedKey.set(normKey, entry);
+    sumByUf.set(ufMeta.uf, (sumByUf.get(ufMeta.uf) ?? 0) + population);
+  }
+
+  if (municipalities.length !== EXPECTED_MUNICIPALITIES_COUNT) {
+    throw new Error(
+      `Validação municipal IBGE falhou: esperado ${EXPECTED_MUNICIPALITIES_COUNT} municípios, obtido ${municipalities.length}.`
+    );
+  }
+
+  for (const st of statePopulations) {
+    const munSum = sumByUf.get(st.uf) ?? 0;
+    if (munSum !== st.population) {
+      throw new Error(
+        `Divergência populacional na UF ${st.uf}: soma dos municípios (${munSum}) != população estadual (${st.population}).`
+      );
+    }
+  }
+
+  const totalNationalMun = municipalities.reduce((acc, m) => acc + m.population, 0);
+  if (totalNationalMun !== EXPECTED_NATIONAL_POPULATION_2025) {
+    throw new Error(
+      `Soma nacional municipal (${totalNationalMun}) diverge de ${EXPECTED_NATIONAL_POPULATION_2025}.`
+    );
+  }
+
+  municipalities.sort((a, b) =>
+    a.uf === b.uf ? a.name.localeCompare(b.name, 'pt-BR') : a.uf.localeCompare(b.uf)
+  );
+
+  console.log(
+    `    OK: ${municipalities.length.toLocaleString('pt-BR')} municípios validados no IBGE. Soma por UF e nacional = ${totalNationalMun.toLocaleString('pt-BR')} hab.`
+  );
+
+  return { municipalities, byNormalizedKey };
+}
+
 function decodeXmlEntities(text: string): string {
   return text
     .replace(/&amp;/g, '&')
@@ -614,17 +794,26 @@ function parseOptionalNumber(raw: string | null): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-function processBancoVde2025(xlsxPath: string): {
+interface MunicipalAccumulator {
+  sumVitima: number;
+  hasVitima: boolean;
+  sumTotal: number;
+  hasTotal: boolean;
+  sumPeso: number;
+  hasPeso: boolean;
+  rowCount: number;
+}
+
+function processBancoVde2025(xlsxPath: string,
+  ibgeMunByNormKey: Map<string, MunicipalityPopulationEntry>
+): {
   accumulators: Map<string, RawAccumulator>;
+  municipalAccumulators: Map<string, MunicipalAccumulator>;
+  uninformedStateAccumulators: Map<string, MunicipalAccumulator>;
+  matchedMunicipalityCodes: Set<string>;
   totalRowsRead: number;
   estadualRowsRead: number;
 } {
-  console.log(`2/4 Lendo arquivo oficial ${xlsxPath}...`);
-  if (!fs.existsSync(xlsxPath)) {
-    throw new Error(
-      `Arquivo não encontrado em "${xlsxPath}". Coloque o BancoVDE 2025.xlsx em raw-data/BancoVDE 2025.xlsx.`
-    );
-  }
 
   const zipBuffer = fs.readFileSync(xlsxPath);
   const entries = readZipCentralDirectory(zipBuffer);
@@ -642,6 +831,15 @@ function processBancoVde2025(xlsxPath: string): {
   const sheetXml = extractZipEntryBuffer(zipBuffer, sheetEntry).toString('utf8');
 
   const accumulators = new Map<string, RawAccumulator>();
+  const municipalAccumulators = new Map<string, MunicipalAccumulator>();
+  const uninformedStateAccumulators = new Map<string, MunicipalAccumulator>();
+  const matchedMunicipalityCodes = new Set<string>();
+  const unmatchedKeys = new Set<string>();
+  const municipalEventsSet = new Set(
+    INDICATOR_CATALOG.filter((c) => c.granularity === 'state_and_municipality').map(
+      (c) => c.rawEventName
+    )
+  );
   let totalRowsRead = 0;
   let estadualRowsRead = 0;
   let colMap: Record<string, number> | null = null;
@@ -697,6 +895,7 @@ function processBancoVde2025(xlsxPath: string): {
       });
       const requiredCols = [
         'uf',
+        'municipio',
         'evento',
         'feminino',
         'masculino',
@@ -783,13 +982,102 @@ function processBancoVde2025(xlsxPath: string): {
       acc.sumNaoInformado += vNInf;
       acc.hasNaoInformado = true;
     }
+
+    if (municipalEventsSet.has(evento)) {
+      const rawMun = (cells[colMap!['municipio']] || '').trim();
+      if (!rawMun) {
+        throw new Error(`Linha ${totalRowsRead} com coluna municipio vazia em ${uf} / ${evento}.`);
+      }
+
+      const normMunName = normalizeMunicipalityName(rawMun);
+      if (normMunName === 'NAO INFORMADO') {
+        const uninfKey = `${uf}::${evento}`;
+        let uAcc = uninformedStateAccumulators.get(uninfKey);
+        if (!uAcc) {
+          uAcc = {
+            sumVitima: 0,
+            hasVitima: false,
+            sumTotal: 0,
+            hasTotal: false,
+            sumPeso: 0,
+            hasPeso: false,
+            rowCount: 0,
+          };
+          uninformedStateAccumulators.set(uninfKey, uAcc);
+        }
+        uAcc.rowCount++;
+        if (vVit !== null) {
+          uAcc.sumVitima += vVit;
+          uAcc.hasVitima = true;
+        }
+        if (vTot !== null) {
+          uAcc.sumTotal += vTot;
+          uAcc.hasTotal = true;
+        }
+        if (vPeso !== null) {
+          uAcc.sumPeso += vPeso;
+          uAcc.hasPeso = true;
+        }
+      } else {
+        const rawLookupKey = `${uf}::${normMunName}`;
+        const canonicalKey = MUNICIPALITY_NAME_ALIASES[rawLookupKey] ?? rawLookupKey;
+        const ibgeMun = ibgeMunByNormKey.get(canonicalKey);
+        if (!ibgeMun) {
+          unmatchedKeys.add(`${rawLookupKey} (original: "${rawMun}")`);
+          continue;
+        }
+        matchedMunicipalityCodes.add(ibgeMun.ibgeCode);
+
+        const munEventKey = `${ibgeMun.ibgeCode}::${evento}`;
+        let mAcc = municipalAccumulators.get(munEventKey);
+        if (!mAcc) {
+          mAcc = {
+            sumVitima: 0,
+            hasVitima: false,
+            sumTotal: 0,
+            hasTotal: false,
+            sumPeso: 0,
+            hasPeso: false,
+            rowCount: 0,
+          };
+          municipalAccumulators.set(munEventKey, mAcc);
+        }
+        mAcc.rowCount++;
+        if (vVit !== null) {
+          mAcc.sumVitima += vVit;
+          mAcc.hasVitima = true;
+        }
+        if (vTot !== null) {
+          mAcc.sumTotal += vTot;
+          mAcc.hasTotal = true;
+        }
+        if (vPeso !== null) {
+          mAcc.sumPeso += vPeso;
+          mAcc.hasPeso = true;
+        }
+      }
+    }
+  }
+
+  if (unmatchedKeys.size > 0) {
+    const list = Array.from(unmatchedKeys).sort().join('\n  - ');
+    throw new Error(
+      `Encontrados ${unmatchedKeys.size} município(s) do BancoVDE sem correspondência no IBGE:\n  - ${list}`
+    );
   }
 
   console.log(
-    `    OK: ${totalRowsRead.toLocaleString('pt-BR')} linhas lidas | ${estadualRowsRead.toLocaleString('pt-BR')} linhas de abrangência Estadual agregadas.`
+    `    OK: ${totalRowsRead.toLocaleString('pt-BR')} linhas lidas | ${estadualRowsRead.toLocaleString('pt-BR')} linhas Estaduais | ${matchedMunicipalityCodes.size.toLocaleString('pt-BR')} de ${EXPECTED_MUNICIPALITIES_COUNT.toLocaleString('pt-BR')} municípios do IBGE presentes no BancoVDE.`
   );
 
-  return { accumulators, totalRowsRead, estadualRowsRead };
+  return {
+    accumulators,
+    municipalAccumulators,
+    uninformedStateAccumulators,
+    matchedMunicipalityCodes,
+    totalRowsRead,
+    estadualRowsRead,
+  };
 }
 
 function buildAndValidateIndicators(
@@ -924,14 +1212,147 @@ function buildAndValidateIndicators(
   return results;
 }
 
+function extractStrictUnitValue(
+  acc: MunicipalAccumulator,
+  unit: MetricUnit,
+  contextLabel: string
+): number | null {
+  if (unit === 'victims') {
+    if (acc.hasTotal || acc.hasPeso) {
+      throw new Error(
+        `Inconsistência de coluna métrica em ${contextLabel}: esperado exclusivamente total_vitima (unit="victims"), mas outra coluna métrica veio preenchida.`
+      );
+    }
+    return acc.hasVitima ? Math.round(acc.sumVitima) : null;
+  }
+
+  if (unit === 'occurrences') {
+    if (acc.hasVitima || acc.hasPeso) {
+      throw new Error(
+        `Inconsistência de coluna métrica em ${contextLabel}: esperado exclusivamente total (unit="occurrences"), mas outra coluna métrica veio preenchida.`
+      );
+    }
+    return acc.hasTotal ? Math.round(acc.sumTotal) : null;
+  }
+
+  if (unit === 'kg') {
+    if (acc.hasVitima || acc.hasTotal) {
+      throw new Error(
+        `Inconsistência de coluna métrica em ${contextLabel}: esperado exclusivamente total_peso (unit="kg"), mas outra coluna métrica veio preenchida.`
+      );
+    }
+    return acc.hasPeso ? Number(acc.sumPeso.toFixed(3)) : null;
+  }
+
+  throw new Error(`Unidade desconhecida "${unit}" em ${contextLabel}.`);
+}
+
+function buildAndValidateMunicipalIndicators(
+  municipalities: MunicipalityPopulationEntry[],
+  stateIndicators: StateCrimeIndicatorEntry[],
+  municipalAccumulators: Map<string, MunicipalAccumulator>,
+  uninformedStateAccumulators: Map<string, MunicipalAccumulator>
+): MunicipalityCrimeIndicatorEntry[] {
+  console.log(
+    '3b/4 Cruzando indicadores municipais (10 eventos) e reconciliando totais estaduais...'
+  );
+
+  const municipalCatalog = INDICATOR_CATALOG.filter(
+    (c) => c.granularity === 'state_and_municipality'
+  );
+
+  if (municipalCatalog.length !== 10) {
+    throw new Error(
+      `Esperado exatamente 10 indicadores municipalizados, encontrado ${municipalCatalog.length}.`
+    );
+  }
+
+  const results: MunicipalityCrimeIndicatorEntry[] = [];
+  const sumByUfAndIndicator = new Map<string, number>();
+
+  for (const mun of municipalities) {
+    for (const indicator of municipalCatalog) {
+      const key = `${mun.ibgeCode}::${indicator.rawEventName}`;
+      const acc = municipalAccumulators.get(key);
+
+      const value = acc
+        ? extractStrictUnitValue(
+          acc,
+          indicator.unit,
+          `município ${mun.name}/${mun.uf} (${mun.ibgeCode}) / ${indicator.rawEventName}`
+        )
+        : null;
+
+      if (value !== null) {
+        const ufIndKey = `${mun.uf}::${indicator.id}`;
+        sumByUfAndIndicator.set(ufIndKey, (sumByUfAndIndicator.get(ufIndKey) ?? 0) + value);
+      }
+
+      let ratePer100k: number | null = null;
+      if (indicator.comparisonMethod === 'population_per_100k' && value !== null) {
+        ratePer100k = Number(((value / mun.population) * 100_000).toFixed(2));
+      }
+
+      results.push({
+        ibgeCode: mun.ibgeCode,
+        uf: mun.uf,
+        indicatorId: indicator.id,
+        value,
+        ratePer100k,
+      });
+    }
+  }
+
+  for (const stInd of stateIndicators) {
+    if (stInd.granularity !== 'state_and_municipality') continue;
+
+    const munSum = sumByUfAndIndicator.get(`${stInd.uf}::${stInd.indicatorId}`) ?? 0;
+    const uninfAcc = uninformedStateAccumulators.get(`${stInd.uf}::${stInd.rawEventName}`);
+    const uninfVal = uninfAcc
+      ? extractStrictUnitValue(
+        uninfAcc,
+        stInd.unit,
+        `NÃO INFORMADO (${stInd.uf}) / ${stInd.rawEventName}`
+      ) ?? 0
+      : 0;
+
+    const combined = munSum + uninfVal;
+    if ((stInd.value ?? 0) !== combined) {
+      throw new Error(
+        `Reconciliação municipal falhou para ${stInd.uf} / ${stInd.indicatorId}: municípios(${munSum}) + NÃO_INFORMADO(${uninfVal}) = ${combined} != estadual(${stInd.value})`
+      );
+    }
+  }
+
+  const validRecordsCount = results.filter((r) => r.value !== null).length;
+  const nullRecordsCount = results.length - validRecordsCount;
+
+  console.log(
+    `    OK: ${results.length.toLocaleString('pt-BR')} registros municipais gerados (${municipalities.length} municípios × ${municipalCatalog.length} indicadores) | ${validRecordsCount.toLocaleString('pt-BR')} com valor oficial e ${nullRecordsCount.toLocaleString('pt-BR')} preservados como null | 100% reconciliados com os totais estaduais.`
+  );
+
+  return results;
+}
+
 async function main(): Promise<void> {
   const rootDir = process.cwd();
   const xlsxPath = path.join(rootDir, 'data', 'raw', 'BancoVDE 2025.xlsx');
   const outPopPath = path.join(rootDir, 'src', 'data', 'statePopulation.json');
   const outIndPath = path.join(rootDir, 'src', 'data', 'stateIndicators.json');
+  const outMunPopPath = path.join(rootDir, 'src', 'data', 'municipalityPopulation.json');
+  const outMunIndPath = path.join(rootDir, 'src', 'data', 'municipalityIndicators.json');
 
   const populations = await fetchAndValidateIbgePopulation2025();
-  const { accumulators, totalRowsRead } = processBancoVde2025(xlsxPath);
+  const { municipalities, byNormalizedKey } =
+    await fetchAndValidateIbgeMunicipalities2025(populations);
+
+  const {
+    accumulators,
+    municipalAccumulators,
+    uninformedStateAccumulators,
+    matchedMunicipalityCodes,
+    totalRowsRead,
+  } = processBancoVde2025(xlsxPath, byNormalizedKey);
 
   if (totalRowsRead !== 832_302) {
     throw new Error(
@@ -940,15 +1361,29 @@ async function main(): Promise<void> {
   }
 
   const indicators = buildAndValidateIndicators(populations, accumulators);
+  const municipalIndicators = buildAndValidateMunicipalIndicators(
+    municipalities,
+    indicators,
+    municipalAccumulators,
+    uninformedStateAccumulators
+  );
 
   console.log('4/4 Gravando datasets validados em src/data/...');
   fs.mkdirSync(path.dirname(outPopPath), { recursive: true });
   fs.writeFileSync(outPopPath, JSON.stringify(populations, null, 2) + '\n', 'utf8');
   fs.writeFileSync(outIndPath, JSON.stringify(indicators, null, 2) + '\n', 'utf8');
+  fs.writeFileSync(outMunPopPath, JSON.stringify(municipalities) + '\n', 'utf8');
+  fs.writeFileSync(outMunIndPath, JSON.stringify(municipalIndicators) + '\n', 'utf8');
+
+  const formatKb = (filePath: string) =>
+    `${(fs.statSync(filePath).size / 1024).toFixed(1)} KB`;
 
   console.log('\nConcluído com sucesso!');
-  console.log(`- ${outPopPath}`);
-  console.log(`- ${outIndPath}`);
+  console.log(`- Cobertura municipal no BancoVDE: ${matchedMunicipalityCodes.size.toLocaleString('pt-BR')} de ${municipalities.length.toLocaleString('pt-BR')} municípios do IBGE tiveram registros.`);
+  console.log(`- ${outPopPath} (${formatKb(outPopPath)})`);
+  console.log(`- ${outIndPath} (${formatKb(outIndPath)})`);
+  console.log(`- ${outMunPopPath} (${formatKb(outMunPopPath)})`);
+  console.log(`- ${outMunIndPath} (${formatKb(outMunIndPath)})`);
 }
 
 main().catch((err) => {
