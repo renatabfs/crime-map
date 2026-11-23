@@ -86,3 +86,50 @@ export interface OfficialSummaryStats {
   availableStatesCount: number;
   unavailableStatesCount: number;
 }
+
+export interface MunicipalityPopulationEntry {
+  ibgeCode: string;
+  uf: string;
+  name: string;
+  population: number;
+}
+
+export interface MunicipalityCrimeIndicatorEntry {
+  ibgeCode: string;
+  uf: string;
+  indicatorId: string;
+  value: number | null;
+  ratePer100k: number | null;
+}
+
+export interface EnrichedMunicipalityIndicator extends MunicipalityCrimeIndicatorEntry {
+  municipalityName: string;
+  population: number;
+  unit: MetricUnit;
+  unitLabel: string;
+  comparisonMethod: ComparisonMethod;
+}
+
+export interface MunicipalityRankingItem {
+  ibgeCode: string;
+  uf: string;
+  municipalityName: string;
+  value: number;
+  ratePer100k: number | null;
+  population: number;
+  metricValue: number;
+  unitLabel: string;
+  effectiveMode: MetricDisplayMode;
+}
+
+export interface OfficialMunicipalitySummaryStats {
+  indicator: IndicatorCatalogMetadata | null;
+  municipality: MunicipalityPopulationEntry | null;
+  value: number | null;
+  ratePer100k: number | null;
+  unit: MetricUnit | null;
+  unitLabel: string;
+  comparisonMethod: ComparisonMethod | null;
+  stateRankPosition: number | null;
+  stateRankedTotalCount: number;
+}
