@@ -126,7 +126,7 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
             (c) => c.unit === currentIndicator.unit
         );
 
-        return sameUnitIndicators
+        const sorted = sameUnitIndicators
             .map((ind) => {
                 const summary = crimeService.getOfficialIndicatorSummary(
                     ind.id,
@@ -141,18 +141,26 @@ export default function ChartsPanel({ filters }: ChartsPanelProps) {
                 };
             })
             .filter((r) => r.isAvailable && r.value > 0)
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 6);
+            .sort((a, b) => b.value - a.value);
+
+        const top6 = sorted.slice(0, 6);
+        if (!top6.some((item) => item.isSelected)) {
+            const selectedItem = sorted.find((item) => item.isSelected);
+            if (selectedItem) {
+                top6.push(selectedItem);
+            }
+        }
+        return top6;
     }, [catalog, currentIndicator, stateUf]);
 
     const summaryInfo = useMemo(
         () =>
-          crimeService.getOfficialIndicatorSummary(
-            indicatorId,
-            stateUf
-          ),
+            crimeService.getOfficialIndicatorSummary(
+                indicatorId,
+                stateUf
+            ),
         [stateUf, indicatorId]
-      );
+    );
     return (
         <div className="charts-column">
             <div className="chart-card">
