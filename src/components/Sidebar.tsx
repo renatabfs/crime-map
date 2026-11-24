@@ -201,7 +201,7 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
               value={localFilters.state || 'all'}
               onChange={handleChange}
             >
-              <option value="all">Todo o Brasil (27 UFs)</option>
+              <option value="all">Todo o Brasil</option>
               {BRAZIL_STATES.map((st) => (
                 <option key={st.uf} value={st.uf}>
                   {st.name} ({st.uf})
