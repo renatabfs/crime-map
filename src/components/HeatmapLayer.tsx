@@ -1,28 +1,40 @@
-import { HeatmapLayer as ReactLeafletHeatmap } from 'react-leaflet-heatmap-layer-v3';
+
+import { useEffect } from 'react';
+import { useMap } from 'react-leaflet';
+import type { Layer } from 'leaflet';
+import { HeatLayer } from 'leaflet.heat';
 
 interface HeatmapLayerProps {
   points: [number, number, number][];
 }
 
 export default function HeatmapLayer({ points }: HeatmapLayerProps) {
-  const heatmapData = points.map(p => ({
-    lat: p[0],
-    lng: p[1],
-    intensity: p[2]
-  }));
+  const map = useMap();
 
-  return (
-    <ReactLeafletHeatmap
-      fitBoundsOnLoad={false}
-      fitBoundsOnUpdate={false}
-      points={heatmapData}
-      longitudeExtractor={(m: any) => m.lng}
-      latitudeExtractor={(m: any) => m.lat}
-      intensityExtractor={(m: any) => m.intensity}
-      radius={30}
-      blur={20}
-      maxZoom={14}
-      gradient={{ 0.3: '#4a0404', 0.5: '#8b0000', 0.8: '#e12c2c', 1.0: '#ff6b6b' }}
-    />
-  );
+  useEffect(() => {
+    const heatLayer = new HeatLayer(points, {
+      radius: 40,
+      blur: 25,
+      minOpacity: 0.2,
+      maxZoom: 5,
+      max: 1,
+      gradient: {
+        0.2: '#4a0404',
+        0.4: '#8b0000',
+        0.6: '#e12c2c',
+        0.8: '#ff3333',
+        1.0: '#ff7777',
+      },
+    });
+
+    const layer = heatLayer as unknown as Layer;
+
+    layer.addTo(map);
+
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [map, points]);
+
+  return null;
 }
