@@ -7,7 +7,6 @@ import {
   MapPin,
   Calendar,
   Shield,
-  Fingerprint,
   SlidersHorizontal,
   Scale,
   X,
@@ -139,12 +138,27 @@ export default function Sidebar({ filters, setFilters, activeTab, setActiveTab, 
           <X size={20} />
         </button>
       )}
-      <div className="brand" style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px', marginBottom: '6px' }}>
-        <Fingerprint size={64} color="#e12c2c" strokeWidth={1.5} />
+      <div className="brand" style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '4px', marginBottom: '6px' }}>
+        <img
+          src="crimemap-logo.png"
+          alt="CrimeMap"
+          style={{
+            width: '56px',
+            height: 'auto',
+            display: 'block',
+            margin: '0 auto',
+          }}
+        />
         <div>
-          <h1 style={{ fontSize: '28px', margin: 0, letterSpacing: '-0.5px' }}>CrimeMap</h1>
-          <p style={{ fontSize: '13px', marginTop: '4px' }}>Visualize. Analise. Entenda.</p>
+          <h1 style={{
+            fontSize: '23px',
+            fontWeight: 700,
+            margin: 0,
+            letterSpacing: '-0.4px',
+            lineHeight: 1.15,
+          }}>Crime<span style={{ color: '#e12c2c' }}>Map</span></h1>
         </div>
+        <p style={{ fontSize: '12px', margin: 0 }}>Visualize. Analise. Entenda.</p>
       </div>
 
       <nav className="nav-menu">
