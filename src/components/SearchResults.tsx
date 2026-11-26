@@ -7,17 +7,13 @@ import {
   List,
   Map as MapIcon,
   BarChart2,
-  Clock,
   MapPin,
-  Eye,
-  X,
-  UserX,
+  Building2,
+  Database,
 } from 'lucide-react';
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
   PieChart,
   Pie,
   Cell,
@@ -28,17 +24,13 @@ import {
   Tooltip,
 } from 'recharts';
 import 'leaflet/dist/leaflet.css';
-import { citiesMetadata, crimeData, type CrimeRecord } from '../data/mockData';
+import { crimeService, BRAZIL_STATES } from '../services/crimeService';
+import type { MunicipalityPopulationEntry, MetricDisplayMode } from '../types/crime';
 import type { SearchSelection } from './Topbar';
 
 interface SearchResultsProps {
   confirmedSearch: SearchSelection;
-  filters: {
-    city: string;
-    neighborhood?: string;
-    period: string;
-    crimeType: string;
-  };
+  filters: any;
   onBackHome: () => void;
 }
 
@@ -50,130 +42,253 @@ function MapViewportController({ center, zoom }: { center: [number, number]; zoo
   return null;
 }
 
+interface OfficialSearchMatch {
+  id: string;
+  category: 'Estado (UF)' | 'Município (IBGE)' | 'Indicador (Sinesp VDE)';
+  title: string;
+  subtitle: string;
+  uf?: string;
+  ibgeCode?: string;
+  indicatorId?: string;
+  population?: number | null;
+  value: number | null;
+  ratePer100k: number | null;
+  unitLabel: string;
+  coords?: [number, number];
+}
+
 export default function SearchResults({
   confirmedSearch,
   filters,
   onBackHome,
 }: SearchResultsProps) {
   const [viewTab, setViewTab] = useState<'occurrences' | 'map' | 'charts'>('occurrences');
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
-  const [visibleCount, setVisibleCount] = useState(5);
-  const [selectedRecord, setSelectedRecord] = useState<CrimeRecord | null>(null);
+  const [sortOrder, setSortOrder] = useState<'metric_desc' | 'name_asc'>('metric_desc');
+  const [visibleCount, setVisibleCount] = useState(12);
+  const [municipalValuesMap, setMunicipalValuesMap] = useState<
+    Record<string, { value: number; ratePer100k: number | null }>
+  >({});
+  const [loadingMunValues, setLoadingMunValues] = useState(false);
 
-  const periodLabels: Record<string, { title: string; subtitle: string }> = {
-    '30-days': { title: 'Últimos 30 dias', subtitle: 'nos últimos 30 dias' },
-    '6-months': { title: 'Últimos 6 meses', subtitle: 'nos últimos 6 meses' },
-    '1-year': { title: 'Último ano', subtitle: 'no último ano' },
-    '5-years': { title: '2019 – 2026', subtitle: 'nos últimos 5 anos' },
-  };
+  const indicatorId: string = confirmedSearch.indicatorId || filters.indicatorId || 'homicidio-doloso';
+  const metricMode: MetricDisplayMode = filters.metricMode || 'rate';
+  const selectedYear: number = filters.year || 2025;
 
-  const activePeriod = periodLabels[filters.period] || periodLabels['5-years'];
+  const catalog = useMemo(() => crimeService.getOfficialIndicatorsCatalog(), []);
+  const currentIndicator = useMemo(
+    () => catalog.find((c) => c.id === indicatorId) ?? catalog[0],
+    [catalog, indicatorId]
+  );
 
-  const matchingRecords = useMemo(() => {
+  const isMunicipalIndicator =
+    currentIndicator?.granularity === 'state_and_municipality';
+
+  const matchedMunicipalities = useMemo<MunicipalityPopulationEntry[]>(() => {
     const rawTerm = confirmedSearch.label.trim().toLowerCase();
+    if (!rawTerm || rawTerm.length < 2) return [];
 
-    return crimeData.filter((record) => {
-      if (
-        filters.city &&
-        filters.city !== 'all' &&
-        record.city.toLowerCase() !== filters.city.toLowerCase()
-      ) {
-        return false;
+    const found: MunicipalityPopulationEntry[] = [];
+    for (const st of BRAZIL_STATES) {
+      const muns = crimeService.getOfficialMunicipalitiesByState(st.uf);
+      for (const m of muns) {
+        if (
+          m.name.toLowerCase().includes(rawTerm) ||
+          m.ibgeCode.startsWith(rawTerm) ||
+          `${m.name.toLowerCase()} (${m.uf.toLowerCase()})`.includes(rawTerm)
+        ) {
+          found.push(m);
+        }
       }
-      if (
-        filters.neighborhood &&
-        filters.neighborhood !== 'all' &&
-        record.neighborhood.toLowerCase() !== filters.neighborhood.toLowerCase()
-      ) {
-        return false;
-      }
+    }
+    return found.slice(0, 60);
+  }, [confirmedSearch.label]);
 
-      if (
-        filters.crimeType &&
-        filters.crimeType !== 'all' &&
-        record.type.toLowerCase() !== filters.crimeType.toLowerCase()
-      ) {
-        return false;
-      }
+  useEffect(() => {
+    let active = true;
+    const distinctUfs = Array.from(new Set(matchedMunicipalities.map((m) => m.uf)));
 
-      if (confirmedSearch.city && record.city.toLowerCase() !== confirmedSearch.city.toLowerCase()) {
-        return false;
-      }
-      if (
-        confirmedSearch.neighborhood &&
-        record.neighborhood.toLowerCase() !== confirmedSearch.neighborhood.toLowerCase()
-      ) {
-        return false;
-      }
-      if (
-        confirmedSearch.crimeType &&
-        record.type.toLowerCase() !== confirmedSearch.crimeType.toLowerCase()
-      ) {
-        return false;
-      }
+    if (distinctUfs.length === 0 || !isMunicipalIndicator) {
+      setMunicipalValuesMap({});
+      setLoadingMunValues(false);
+      return;
+    }
 
-      if (
-        !confirmedSearch.city &&
-        !confirmedSearch.neighborhood &&
-        !confirmedSearch.crimeType &&
-        rawTerm
-      ) {
-        const matchesAny =
-          record.city.toLowerCase().includes(rawTerm) ||
-          record.neighborhood.toLowerCase().includes(rawTerm) ||
-          record.type.toLowerCase().includes(rawTerm) ||
-          (record.description && record.description.toLowerCase().includes(rawTerm));
-        if (!matchesAny) return false;
-      }
+    setLoadingMunValues(true);
+    Promise.all(
+      distinctUfs.map((uf) =>
+        crimeService.getOfficialMunicipalityRanking(uf, indicatorId, metricMode)
+      )
+    )
+      .then((rankings) => {
+        if (!active) return;
+        const map: Record<string, { value: number; ratePer100k: number | null }> = {};
+        rankings.flat().forEach((item) => {
+          map[item.ibgeCode] = {
+            value: item.value,
+            ratePer100k: item.ratePer100k,
+          };
+        });
+        setMunicipalValuesMap(map);
+      })
+      .finally(() => {
+        if (active) setLoadingMunValues(false);
+      });
 
-      return true;
+    return () => {
+      active = false;
+    };
+  }, [matchedMunicipalities, isMunicipalIndicator, indicatorId, metricMode]);
+
+  const matchingRecords = useMemo<OfficialSearchMatch[]>(() => {
+    const rawTerm = confirmedSearch.label.trim().toLowerCase();
+    if (!rawTerm) return [];
+
+    const results: OfficialSearchMatch[] = [];
+
+    BRAZIL_STATES.forEach((st) => {
+      if (
+        st.name.toLowerCase().includes(rawTerm) ||
+        st.uf.toLowerCase() === rawTerm
+      ) {
+        const summary = crimeService.getOfficialIndicatorSummary(
+          indicatorId,
+          st.uf,
+          selectedYear
+        );
+        results.push({
+          id: `uf-${st.uf}`,
+          category: 'Estado (UF)',
+          title: `${st.name} (${st.uf})`,
+          subtitle: `Indicador ativo: ${currentIndicator?.label}`,
+          uf: st.uf,
+          population: summary.population,
+          value: summary.totalValue,
+          ratePer100k: summary.ratePer100k,
+          unitLabel: currentIndicator?.unitLabel || '',
+          coords: st.coords,
+        });
+      }
     });
-  }, [confirmedSearch, filters]);
+
+    catalog.forEach((ind) => {
+      if (ind.label.toLowerCase().includes(rawTerm)) {
+        const summary = crimeService.getOfficialIndicatorSummary(
+          ind.id,
+          filters.state || 'all',
+          selectedYear
+        );
+        results.push({
+          id: `ind-${ind.id}`,
+          category: 'Indicador (Sinesp VDE)',
+          title: ind.label,
+          subtitle:
+            ind.granularity === 'state_and_municipality'
+              ? 'Abrangência: Estadual (27 UFs) e Municipal (5.571 municípios)'
+              : 'Abrangência: Exclusivamente Estadual (27 UFs)',
+          indicatorId: ind.id,
+          population: summary.population,
+          value: summary.totalValue,
+          ratePer100k: summary.ratePer100k,
+          unitLabel: ind.unitLabel,
+        });
+      }
+    });
+
+    matchedMunicipalities.forEach((mun) => {
+      const stateMeta = BRAZIL_STATES.find((s) => s.uf === mun.uf);
+      const munMetric = isMunicipalIndicator
+        ? municipalValuesMap[mun.ibgeCode] ?? null
+        : null;
+
+      results.push({
+        id: `mun-${mun.ibgeCode}`,
+        category: 'Município (IBGE)',
+        title: `${mun.name} (${mun.uf})`,
+        subtitle: `Código IBGE: ${mun.ibgeCode} • População: ${mun.population.toLocaleString('pt-BR')} hab.`,
+        uf: mun.uf,
+        ibgeCode: mun.ibgeCode,
+        population: mun.population,
+        value: munMetric ? munMetric.value : null,
+        ratePer100k: munMetric ? munMetric.ratePer100k : null,
+        unitLabel: currentIndicator?.unitLabel || '',
+        coords: stateMeta?.coords,
+      });
+    });
+
+    return results;
+  }, [
+    confirmedSearch.label,
+    indicatorId,
+    selectedYear,
+    currentIndicator,
+    catalog,
+    filters.state,
+    matchedMunicipalities,
+    isMunicipalIndicator,
+    municipalValuesMap,
+  ]);
 
   const sortedRecords = useMemo(() => {
     return [...matchingRecords].sort((a, b) => {
-      const timeA = new Date(a.date).getTime();
-      const timeB = new Date(b.date).getTime();
-      return sortOrder === 'newest' ? timeB - timeA : timeA - timeB;
+      if (sortOrder === 'name_asc') {
+        return a.title.localeCompare(b.title, 'pt-BR');
+      }
+      const valA =
+        metricMode === 'rate' && a.ratePer100k !== null ? a.ratePer100k : a.value;
+      const valB =
+        metricMode === 'rate' && b.ratePer100k !== null ? b.ratePer100k : b.value;
+      if (valA === null && valB === null) return 0;
+      if (valA === null) return 1;
+      if (valB === null) return -1;
+      return valB - valA;
     });
-  }, [matchingRecords, sortOrder]);
+  }, [matchingRecords, sortOrder, metricMode]);
 
   const paginatedRecords = sortedRecords.slice(0, visibleCount);
 
-  const mapViewport = useMemo<{ center: [number, number]; zoom: number }>(() => {
-    if (confirmedSearch.neighborhood && matchingRecords.length > 0) {
-      return { center: matchingRecords[0].coords, zoom: 15 };
-    }
+  const mapMarkers = useMemo(() => {
+    const byUf = new Map<
+      string,
+      { uf: string; title: string; coords: [number, number]; value: number | null; rate: number | null }
+    >();
 
-    const targetCityName =
-      confirmedSearch.city || (filters.city !== 'all' ? filters.city : '');
-
-    if (targetCityName) {
-      const cityMeta = citiesMetadata.find(
-        (c) => c.name.toLowerCase() === targetCityName.toLowerCase()
-      );
-      if (cityMeta) {
-        return { center: cityMeta.coords, zoom: cityMeta.zoom };
+    matchingRecords.forEach((item) => {
+      if (item.uf && item.coords && !byUf.has(item.uf)) {
+        const stSummary = crimeService.getOfficialIndicatorSummary(
+          indicatorId,
+          item.uf,
+          selectedYear
+        );
+        byUf.set(item.uf, {
+          uf: item.uf,
+          title: item.title,
+          coords: item.coords,
+          value: stSummary.totalValue,
+          rate: stSummary.ratePer100k,
+        });
       }
+    });
+
+    return Array.from(byUf.values());
+  }, [matchingRecords, indicatorId, selectedYear]);
+
+  const mapViewport = useMemo<{ center: [number, number]; zoom: number }>(() => {
+    if (mapMarkers.length === 1) {
+      return { center: mapMarkers[0].coords, zoom: 6 };
     }
+    return { center: [-14.235, -51.9253], zoom: 4 };
+  }, [mapMarkers]);
 
-    if (matchingRecords.length > 0) {
-      return { center: matchingRecords[0].coords, zoom: 14 };
-    }
-
-    return { center: citiesMetadata[0].coords, zoom: 13 };
-  }, [confirmedSearch, filters.city, matchingRecords]);
-
-  const typeDistribution = useMemo(() => {
+  const categoryDistribution = useMemo(() => {
     const total = matchingRecords.length;
     if (total === 0) return [];
 
     const counts: Record<string, number> = {};
     matchingRecords.forEach((r) => {
-      counts[r.type] = (counts[r.type] || 0) + 1;
+      counts[r.category] = (counts[r.category] || 0) + 1;
     });
 
-    const palette = ['#e12c2c', '#ff5c5c', '#ff8a8a', '#6b7280', '#374151'];
+    const palette = ['#e12c2c', '#ff5c5c', '#9ca3af'];
 
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1])
@@ -185,43 +300,23 @@ export default function SearchResults({
       }));
   }, [matchingRecords]);
 
-  const timelineData = useMemo(() => {
-    const grouped: Record<string, number> = {};
-    [...matchingRecords]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .forEach((r) => {
-        const [datePart] = r.date.split('T');
-        const [, month, day] = datePart.split('-');
-        const label = `${day}/${month}`;
-        grouped[label] = (grouped[label] || 0) + 1;
-      });
+  const comparativeBars = useMemo(() => {
+    return sortedRecords
+      .filter((r) => r.value !== null)
+      .slice(0, 8)
+      .map((r) => ({
+        name: r.title,
+        value:
+          metricMode === 'rate' && r.ratePer100k !== null
+            ? r.ratePer100k
+            : (r.value as number),
+      }));
+  }, [sortedRecords, metricMode]);
 
-    return Object.entries(grouped).map(([date, count]) => ({ date, count }));
-  }, [matchingRecords]);
-
-  const locationContextText = useMemo(() => {
-    if (confirmedSearch.city) {
-      const meta = citiesMetadata.find(
-        (c) => c.name.toLowerCase() === confirmedSearch.city!.toLowerCase()
-      );
-      return meta ? `${meta.name} - ${meta.state}` : confirmedSearch.city;
-    }
-    if (filters.city && filters.city !== 'all') {
-      const meta = citiesMetadata.find(
-        (c) => c.name.toLowerCase() === filters.city.toLowerCase()
-      );
-      return meta ? `${meta.name} - ${meta.state}` : filters.city;
-    }
-    return 'todas as cidades monitoradas';
-  }, [confirmedSearch.city, filters.city]);
-
-  const formatDateTime = (isoDate: string) => {
-    const [datePart, timePart] = isoDate.split('T');
-    const [year, month, day] = datePart.split('-');
-    return {
-      date: `${day}/${month}/${year}`,
-      time: timePart ? timePart.slice(0, 5) : 'Horário indisponível',
-    };
+  const renderCategoryIcon = (category: OfficialSearchMatch['category']) => {
+    if (category === 'Estado (UF)') return <MapPin size={26} color="#e12c2c" strokeWidth={1.6} />;
+    if (category === 'Município (IBGE)') return <Building2 size={26} color="#e12c2c" strokeWidth={1.6} />;
+    return <ShieldAlert size={26} color="#e12c2c" strokeWidth={1.6} />;
   };
 
   return (
@@ -233,7 +328,7 @@ export default function SearchResults({
               <ArrowLeft size={14} /> Início
             </button>
             <span>&gt;</span>
-            <span className="breadcrumb-current">Resultados da busca</span>
+            <span className="breadcrumb-current">Resultados na base oficial</span>
           </div>
 
           <h1 className="results-title">
@@ -241,29 +336,29 @@ export default function SearchResults({
           </h1>
           <p className="results-subtitle">
             {matchingRecords.length === 1
-              ? `Foi encontrado 1 registro ${activePeriod.subtitle} em ${locationContextText}.`
-              : `Foram encontrados ${matchingRecords.length} registros ${activePeriod.subtitle} em ${locationContextText}.`}
+              ? `Foi encontrada 1 correspondência oficial na base MJSP / Sinesp VDE + IBGE (${selectedYear}).`
+              : `Foram encontradas ${matchingRecords.length} correspondências oficiais na base MJSP / Sinesp VDE + IBGE (${selectedYear}).`}
           </p>
 
           <div className="results-kpi-row">
             <div className="results-kpi-card">
               <ShieldAlert size={22} color="#e12c2c" />
               <div className="results-kpi-value">{matchingRecords.length}</div>
-              <div className="results-kpi-label">Ocorrências</div>
+              <div className="results-kpi-label">Correspondências</div>
             </div>
 
             <div className="results-kpi-card">
               <Calendar size={22} color="#e12c2c" />
-              <div className="results-kpi-value">{activePeriod.title}</div>
-              <div className="results-kpi-label">Período</div>
+              <div className="results-kpi-value">{selectedYear}</div>
+              <div className="results-kpi-label">Ano-base oficial</div>
             </div>
 
             <div className="results-kpi-card highlighted">
-              <TrendingUp size={22} color="#e12c2c" />
-              <div className="results-kpi-value" style={{ fontSize: '15px', lineHeight: 1.3 }}>
-                Sem dados comparativos
+              <Database size={22} color="#e12c2c" />
+              <div className="results-kpi-value" style={{ fontSize: '14px', lineHeight: 1.3 }}>
+                {currentIndicator?.label}
               </div>
-              <div className="results-kpi-label">Histórico anterior indisponível</div>
+              <div className="results-kpi-label">Indicador de referência</div>
             </div>
           </div>
         </div>
@@ -279,22 +374,24 @@ export default function SearchResults({
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; OpenStreetMap contributors'
             />
-            {matchingRecords.map((item) => (
+            {mapMarkers.map((item) => (
               <CircleMarker
-                key={item.id}
+                key={item.uf}
                 center={item.coords}
-                radius={8}
+                radius={9}
                 pathOptions={{
-                  color: '#ff6b6b',
-                  fillColor: '#e12c2c',
+                  color: item.value !== null ? '#ff6b6b' : '#64748b',
+                  fillColor: item.value !== null ? '#e12c2c' : '#475569',
                   fillOpacity: 0.9,
                   weight: 2,
                 }}
               >
                 <Popup>
-                  <strong>{item.type}</strong> — {item.neighborhood}, {item.city}
+                  <strong>{item.title}</strong>
                   <br />
-                  {item.description || 'Descrição indisponível'}
+                  {item.value !== null
+                    ? `${item.value.toLocaleString('pt-BR')} ${currentIndicator?.unitLabel}`
+                    : 'Dado indisponível (null)'}
                 </Popup>
               </CircleMarker>
             ))}
@@ -310,7 +407,7 @@ export default function SearchResults({
             onClick={() => setViewTab('occurrences')}
           >
             <List size={16} />
-            Ocorrências
+            Registros Oficiais
             <span className="tab-count-badge">{matchingRecords.length}</span>
           </button>
 
@@ -338,10 +435,10 @@ export default function SearchResults({
             <span>Ordenar por:</span>
             <select
               value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+              onChange={(e) => setSortOrder(e.target.value as 'metric_desc' | 'name_asc')}
             >
-              <option value="newest">Mais recentes</option>
-              <option value="oldest">Mais antigas</option>
+              <option value="metric_desc">Maior indicador</option>
+              <option value="name_asc">Ordem alfabética</option>
             </select>
           </div>
         )}
@@ -350,60 +447,67 @@ export default function SearchResults({
       {viewTab === 'occurrences' && (
         <div className="results-content-split">
           <div className="occurrences-list-col">
-            {paginatedRecords.length === 0 ? (
+            {loadingMunValues ? (
+              <div className="empty-results-card">
+                <Database size={28} color="#e12c2c" />
+                <h3>Consultando base municipal oficial...</h3>
+              </div>
+            ) : paginatedRecords.length === 0 ? (
               <div className="empty-results-card">
                 <ShieldAlert size={32} color="#e12c2c" />
-                <h3>Nenhum registro encontrado</h3>
+                <h3>Nenhuma correspondência oficial encontrada</h3>
                 <p>
-                  Não há ocorrências registradas para "{confirmedSearch.label}" com os filtros selecionados.
+                  Não foram encontrados estados, municípios IBGE ou indicadores Sinesp VDE para "{confirmedSearch.label}".
                 </p>
               </div>
             ) : (
               <>
-                {paginatedRecords.map((occ) => {
-                  const { date, time } = formatDateTime(occ.date);
-                  return (
-                    <div key={occ.id} className="occurrence-horizontal-card">
-                      <div className="occ-avatar-box">
-                        <UserX size={28} color="#e12c2c" strokeWidth={1.6} />
-                      </div>
-
-                      <div className="occ-main-info">
-                        <div className="occ-meta-row">
-                          <span>
-                            <Calendar size={13} color="#e12c2c" /> {date}
-                          </span>
-                          <span>
-                            <Clock size={13} color="#e12c2c" /> {time}
-                          </span>
-                          <span>
-                            <MapPin size={13} color="#e12c2c" /> {occ.neighborhood}, {occ.city} - {occ.state}
-                          </span>
-                        </div>
-                        <h4 className="occ-type-title">{occ.type}</h4>
-                        <p className="occ-desc-text">
-                          {occ.description || 'Descrição não disponibilizada pela fonte.'}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="occ-details-btn"
-                        onClick={() => setSelectedRecord(occ)}
-                      >
-                        <Eye size={15} /> Ver detalhes &rarr;
-                      </button>
+                {paginatedRecords.map((item) => (
+                  <div key={item.id} className="occurrence-horizontal-card">
+                    <div className="occ-avatar-box">
+                      {renderCategoryIcon(item.category)}
                     </div>
-                  );
-                })}
+
+                    <div className="occ-main-info">
+                      <div className="occ-meta-row">
+                        <span>
+                          <Database size={13} color="#e12c2c" /> {item.category}
+                        </span>
+                        <span>
+                          <Calendar size={13} color="#e12c2c" /> Ano-base {selectedYear}
+                        </span>
+                      </div>
+                      <h4 className="occ-type-title">{item.title}</h4>
+                      <p className="occ-desc-text">{item.subtitle}</p>
+                    </div>
+
+                    <div style={{ textAlign: 'right', minWidth: '150px' }}>
+                      <strong style={{ display: 'block', fontSize: '15px' }}>
+                        {item.value !== null
+                          ? `${item.value.toLocaleString('pt-BR')} ${item.unitLabel}`
+                          : item.category === 'Município (IBGE)' && !isMunicipalIndicator
+                            ? 'Disponível apenas por UF'
+                            : 'Indisponível (null)'}
+                      </strong>
+                      <span style={{ fontSize: '12px', color: '#8b92a5' }}>
+                        {item.ratePer100k !== null
+                          ? `${item.ratePer100k.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })} / 100 mil hab.`
+                          : 'MJSP / IBGE'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
 
                 {visibleCount < sortedRecords.length && (
                   <button
                     type="button"
                     className="load-more-btn"
-                    onClick={() => setVisibleCount((prev) => prev + 5)}
+                    onClick={() => setVisibleCount((prev) => prev + 12)}
                   >
-                    Carregar mais ocorrências ({sortedRecords.length - visibleCount} restantes)
+                    Carregar mais resultados ({sortedRecords.length - visibleCount} restantes)
                   </button>
                 )}
               </>
@@ -417,46 +521,16 @@ export default function SearchResults({
             </div>
 
             <p className="side-panel-summary">
-              Para a pesquisa <strong>{confirmedSearch.label}</strong>, foram contabilizadas{' '}
-              <strong>{matchingRecords.length}</strong>{' '}
-              {matchingRecords.length === 1 ? 'ocorrência registrada' : 'ocorrências registradas'}{' '}
-              {activePeriod.subtitle}. Não há dados de período anterior na base para cálculo de variação percentual.
+              A busca consulta simultaneamente as <strong>27 UFs</strong>, os{' '}
+              <strong>5.571 municípios do IBGE</strong> e os{' '}
+              <strong>{catalog.length} indicadores oficiais do Sinesp VDE</strong>. Registros
+              sem divulgação oficial permanecem identificados como{' '}
+              <code>Indisponível (null)</code>.
             </p>
 
-            {timelineData.length > 0 && (
-              <div style={{ width: '100%', height: 90, marginTop: 12 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={timelineData}>
-                    <defs>
-                      <linearGradient id="resultsRedGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#e12c2c" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="#e12c2c" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#1a1c23',
-                        border: 'none',
-                        color: '#fff',
-                        fontSize: 12,
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="count"
-                      stroke="#e12c2c"
-                      strokeWidth={2}
-                      fill="url(#resultsRedGrad)"
-                      dot={{ r: 3, fill: '#e12c2c' }}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
             <div className="side-panel-types">
-              <h4>Tipos mais comuns</h4>
-              {typeDistribution.length === 0 ? (
+              <h4>Distribuição por categoria</h4>
+              {categoryDistribution.length === 0 ? (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                   Sem registros para exibir distribuição.
                 </p>
@@ -466,13 +540,13 @@ export default function SearchResults({
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={typeDistribution}
+                          data={categoryDistribution}
                           dataKey="count"
                           innerRadius={28}
                           outerRadius={42}
                           paddingAngle={2}
                         >
-                          {typeDistribution.map((entry, idx) => (
+                          {categoryDistribution.map((entry, idx) => (
                             <Cell key={idx} fill={entry.color} />
                           ))}
                         </Pie>
@@ -481,7 +555,7 @@ export default function SearchResults({
                   </div>
 
                   <div className="side-legend-list">
-                    {typeDistribution.map((t) => (
+                    {categoryDistribution.map((t) => (
                       <div key={t.name} className="side-legend-item">
                         <span className="legend-left">
                           <span
@@ -513,22 +587,24 @@ export default function SearchResults({
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               attribution='&copy; OpenStreetMap contributors'
             />
-            {matchingRecords.map((item) => (
+            {mapMarkers.map((item) => (
               <CircleMarker
-                key={item.id}
+                key={item.uf}
                 center={item.coords}
-                radius={9}
+                radius={10}
                 pathOptions={{
-                  color: '#ff6b6b',
-                  fillColor: '#e12c2c',
+                  color: item.value !== null ? '#ff6b6b' : '#64748b',
+                  fillColor: item.value !== null ? '#e12c2c' : '#475569',
                   fillOpacity: 0.9,
                   weight: 2,
                 }}
               >
                 <Popup>
-                  <strong>{item.type}</strong> — {item.neighborhood}, {item.city}
+                  <strong>{item.title}</strong>
                   <br />
-                  {item.description || 'Descrição indisponível'}
+                  {item.value !== null
+                    ? `${item.value.toLocaleString('pt-BR')} ${currentIndicator?.unitLabel}`
+                    : 'Dado indisponível (null)'}
                 </Popup>
               </CircleMarker>
             ))}
@@ -541,17 +617,17 @@ export default function SearchResults({
           <div className="chart-card">
             <div className="chart-header">
               <TrendingUp size={18} color="#e12c2c" />
-              <h3>Registros por Data</h3>
+              <h3>Comparativo dos Resultados Válidos</h3>
             </div>
             <div className="chart-body" style={{ height: 240 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={timelineData}>
-                  <XAxis dataKey="date" stroke="#8b92a5" fontSize={12} />
-                  <YAxis allowDecimals={false} stroke="#8b92a5" fontSize={12} />
+                <BarChart data={comparativeBars}>
+                  <XAxis dataKey="name" stroke="#8b92a5" fontSize={11} />
+                  <YAxis stroke="#8b92a5" fontSize={11} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#1a1c23', border: 'none', color: '#fff' }}
                   />
-                  <Bar dataKey="count" fill="#e12c2c" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="#e12c2c" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -566,14 +642,14 @@ export default function SearchResults({
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={typeDistribution}
+                    data={categoryDistribution}
                     dataKey="count"
                     nameKey="name"
                     innerRadius={55}
                     outerRadius={85}
                     paddingAngle={2}
                   >
-                    {typeDistribution.map((entry, idx) => (
+                    {categoryDistribution.map((entry, idx) => (
                       <Cell key={idx} fill={entry.color} />
                     ))}
                   </Pie>
@@ -582,66 +658,6 @@ export default function SearchResults({
                   />
                 </PieChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Detalhes da Ocorrência */}
-      {selectedRecord && (
-        <div className="modal-backdrop" onClick={() => setSelectedRecord(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Detalhes da Ocorrência</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setSelectedRecord(null)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body-grid">
-              <div>
-                <span className="modal-field-label">Tipo da ocorrência</span>
-                <p className="modal-field-value">{selectedRecord.type}</p>
-              </div>
-              <div>
-                <span className="modal-field-label">Data e horário</span>
-                <p className="modal-field-value">
-                  {formatDateTime(selectedRecord.date).date} às{' '}
-                  {formatDateTime(selectedRecord.date).time}
-                </p>
-              </div>
-              <div>
-                <span className="modal-field-label">Cidade / Estado</span>
-                <p className="modal-field-value">
-                  {selectedRecord.city} - {selectedRecord.state}
-                </p>
-              </div>
-              <div>
-                <span className="modal-field-label">Bairro</span>
-                <p className="modal-field-value">{selectedRecord.neighborhood}</p>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <span className="modal-field-label">Localização</span>
-                <p className="modal-field-value">
-                  {selectedRecord.location || 'Localização detalhada indisponível na fonte'}
-                </p>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <span className="modal-field-label">Descrição</span>
-                <p className="modal-field-value">
-                  {selectedRecord.description || 'Descrição não disponibilizada pela fonte'}
-                </p>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <span className="modal-field-label">Fonte de origem do registro</span>
-                <p className="modal-field-value">
-                  {selectedRecord.source || 'Fonte não informada'}
-                </p>
-              </div>
             </div>
           </div>
         </div>
