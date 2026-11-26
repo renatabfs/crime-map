@@ -1,0 +1,272 @@
+[
+  {
+    "year": 2025,
+    "ibgeCode": "12",
+    "uf": "AC",
+    "stateName": "Acre",
+    "population": 884372,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "27",
+    "uf": "AL",
+    "stateName": "Alagoas",
+    "population": 3220848,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "13",
+    "uf": "AM",
+    "stateName": "Amazonas",
+    "population": 4321616,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "16",
+    "uf": "AP",
+    "stateName": "Amapá",
+    "population": 806517,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "29",
+    "uf": "BA",
+    "stateName": "Bahia",
+    "population": 14870907,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "23",
+    "uf": "CE",
+    "stateName": "Ceará",
+    "population": 9268836,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "53",
+    "uf": "DF",
+    "stateName": "Distrito Federal",
+    "population": 2996899,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "32",
+    "uf": "ES",
+    "stateName": "Espírito Santo",
+    "population": 4126854,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "52",
+    "uf": "GO",
+    "stateName": "Goiás",
+    "population": 7423629,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "21",
+    "uf": "MA",
+    "stateName": "Maranhão",
+    "population": 7018211,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "31",
+    "uf": "MG",
+    "stateName": "Minas Gerais",
+    "population": 21393441,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "50",
+    "uf": "MS",
+    "stateName": "Mato Grosso do Sul",
+    "population": 2924631,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "51",
+    "uf": "MT",
+    "stateName": "Mato Grosso",
+    "population": 3893659,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "15",
+    "uf": "PA",
+    "stateName": "Pará",
+    "population": 8711196,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "25",
+    "uf": "PB",
+    "stateName": "Paraíba",
+    "population": 4164468,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "26",
+    "uf": "PE",
+    "stateName": "Pernambuco",
+    "population": 9562007,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "22",
+    "uf": "PI",
+    "stateName": "Piauí",
+    "population": 3384547,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "41",
+    "uf": "PR",
+    "stateName": "Paraná",
+    "population": 11890517,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "33",
+    "uf": "RJ",
+    "stateName": "Rio de Janeiro",
+    "population": 17223547,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "24",
+    "uf": "RN",
+    "stateName": "Rio Grande do Norte",
+    "population": 3455236,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "11",
+    "uf": "RO",
+    "stateName": "Rondônia",
+    "population": 1751950,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "14",
+    "uf": "RR",
+    "stateName": "Roraima",
+    "population": 738772,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "43",
+    "uf": "RS",
+    "stateName": "Rio Grande do Sul",
+    "population": 11233263,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "42",
+    "uf": "SC",
+    "stateName": "Santa Catarina",
+    "population": 8187029,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "28",
+    "uf": "SE",
+    "stateName": "Sergipe",
+    "population": 2299425,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "35",
+    "uf": "SP",
+    "stateName": "São Paulo",
+    "population": 46081801,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  },
+  {
+    "year": 2025,
+    "ibgeCode": "17",
+    "uf": "TO",
+    "stateName": "Tocantins",
+    "population": 1586859,
+    "referenceDate": "2025-07-01",
+    "source": "IBGE - Estimativas da População Residente (Tabela 6579, Variável 9324)",
+    "apiUrl": "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2025/variaveis/9324?localidades=N3[all]"
+  }
+]

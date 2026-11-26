@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import {
   Database,
   Shield,
@@ -13,8 +13,7 @@ import {
   Globe,
   Code2,
 } from 'lucide-react';
-import { crimeService } from '../services/crimeService';
-import type { DataSourceMetadata } from '../services/crimeService';
+import { crimeService, BRAZIL_STATES } from '../services/crimeService';
 
 interface SourceItem {
   id: string;
@@ -28,58 +27,49 @@ interface SourceItem {
 }
 
 export default function DataSources() {
+  const catalog = useMemo(() => crimeService.getOfficialIndicatorsCatalog(), []);
+  const municipalIndicatorsCount = useMemo(
+    () => catalog.filter((c) => c.granularity === 'state_and_municipality').length,
+    [catalog]
+  );
+  const nationalSummary = useMemo(
+    () => crimeService.getOfficialIndicatorSummary('homicidio-doloso', 'all', 2025),
+    []
+  );
+
   const sourcesList: SourceItem[] = [
     {
-      id: 'ssp-ba',
-      name: 'Secretaria da Segurança Pública da Bahia (SSP-BA)',
-      description: 'Base demonstrativa de registros e estatísticas criminais consolidados.',
+      id: 'inesp-vde',
+      name: 'MJSP / Sinesp VDE — Dados Nacionais de Segurança Pública',
+      description: 'Base oficial consolidada (BancoVDE 2025.xlsx) com 24 indicadores estaduais e 10 indicadores com detalhamento municipal.',
       badge: 'Oficial',
-      period: '2020 – 2026',
-      updateFrequency: 'Mensal',
-      url: 'https://www.ba.gov.br/seguranca/',
+      period: '2025 (Série histórica incremental)',
+      updateFrequency: 'Anual / Consolidado',
+      url: 'https://www.gov.br/mj/pt-br/assuntos/sua-seguranca/seguranca-publica/estatistica/dados-nacionais-de-seguranca-publica-estatisticas-sinesp-1',
       icon: 'shield',
     },
     {
-      id: 'dados-abertos',
-      name: 'Portal Brasileiro de Dados Abertos (SINESP)',
-      description: 'Indicadores complementares de segurança pública em âmbito nacional.',
-      badge: 'Pública',
-      period: '2018 – 2026',
-      updateFrequency: 'Trimestral',
-      url: 'https://dados.gov.br/',
+      id: 'ibge-pop',
+      name: 'IBGE — Estimativas da População (Tabela 6579 / Variável 9324)',
+      description: 'População residente estimada por Unidade da Federação e Município utilizada no cálculo oficial de taxas por 100 mil habitantes.',
+      badge: 'Oficial',
+      period: '2025 (Série histórica incremental)',
+      updateFrequency: 'Anual',
+      url: 'https://sidra.ibge.gov.br/tabela/6579',
       icon: 'chart',
     },
     {
-      id: 'ibge',
-      name: 'IBGE – Cidades e Estados',
-      description: 'Malha territorial, divisões municipais e referência geográfica.',
+      id: 'ibge-territorio',
+      name: 'IBGE — Divisão Territorial e Códigos Municipais (DTB)',
+      description: 'Cadastro oficial de 27 Unidades da Federação e 5.571 municípios brasileiros (incluindo Boa Esperança do Norte - MT).',
       badge: 'Livre',
-      period: '2010 – 2026',
+      period: 'Vigente (2025)',
       updateFrequency: 'Anual',
-      url: 'https://cidades.ibge.gov.br/',
+      url: 'https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial.html',
       icon: 'pin',
     },
   ];
-  const [dynamicMetadata, setDynamicMetadata] = useState<DataSourceMetadata>({
-    totalRecords: 0,
-    totalCities: 0,
-    totalStates: 0,
-    uniqueNeighborhoods: 0,
-    periodLabel: 'Carregando...',
-    lastUpdateLabel: 'Carregando...',
-    coverageScope: 'Carregando...',
-  });
-
-  useEffect(() => {
-    let active = true;
-    crimeService.getDataSourcesSummary().then((summary) => {
-      if (active) setDynamicMetadata(summary);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
+  
   const techStack = [
     { name: 'React', color: '#61dafb', url: 'https://react.dev/' },
     { name: 'TypeScript', color: '#3178c6', url: 'https://www.typescriptlang.org/docs/' },
@@ -172,39 +162,41 @@ export default function DataSources() {
             <div className="sources-info-list">
               <div className="info-metric-row">
                 <span className="info-metric-label">
-                  <Calendar size={15} color="#e12c2c" /> Período coberto na base
+                  <Calendar size={15} color="#e12c2c" /> Anos integrados atualmente
                 </span>
-                <strong>{dynamicMetadata.periodLabel}</strong>
+                <strong>2025 (Expansão histórica contínua)</strong>
               </div>
 
               <div className="info-metric-row">
                 <span className="info-metric-label">
-                  <RefreshCw size={15} color="#e12c2c" /> Último registro na base
+                  <RefreshCw size={15} color="#e12c2c" /> Catálogo de indicadores
                 </span>
-                <strong>{dynamicMetadata.lastUpdateLabel}</strong>
+                <strong>{catalog.length} estaduais / {municipalIndicatorsCount} municipais</strong>
               </div>
 
               <div className="info-metric-row">
                 <span className="info-metric-label">
-                  <FileSpreadsheet size={15} color="#e12c2c" /> Formato estruturado
+                  <FileSpreadsheet size={15} color="#e12c2c" /> Pipeline de ingestão
                 </span>
-                <strong>JSON / GeoJSON (API)</strong>
+                <strong>ETL Oficial (XLSX / IBGE JSON)</strong>
               </div>
 
               <div className="info-metric-row">
                 <span className="info-metric-label">
-                  <Globe size={15} color="#e12c2c" /> Cobertura geográfica
+                  <Globe size={15} color="#e12c2c" /> Cobertura territorial
                 </span>
                 <strong>
-                  {dynamicMetadata.totalCities} cidades ({dynamicMetadata.uniqueNeighborhoods} bairros)
+                  {BRAZIL_STATES.length} UFs • 5.571 municípios
                 </strong>
               </div>
 
               <div className="info-metric-row">
                 <span className="info-metric-label">
-                  <Database size={15} color="#e12c2c" /> Registros carregados
+                  <Database size={15} color="#e12c2c" /> População nacional (IBGE 2025)
                 </span>
-                <strong>{dynamicMetadata.totalRecords} ocorrências</strong>
+                <strong>{nationalSummary.population !== null
+                  ? `${nationalSummary.population.toLocaleString('pt-BR')} hab.`
+                  : '213.421.037 hab.'}</strong>
               </div>
             </div>
           </div>
@@ -215,11 +207,11 @@ export default function DataSources() {
               <h2>Como os dados são utilizados?</h2>
             </div>
             <p className="about-card-text">
-              Os registros coletados são organizados, filtrados e agregados pelo
-              CrimeMap para gerar mapas interativos, gráficos comparativos e
-              indicadores estatísticos. O sistema funciona exclusivamente como uma
-              ferramenta de visualização e análise exploratória, não atuando como
-              fonte primária de boletins ou registros policiais.
+              Os dados oficiais do MJSP / Sinesp VDE e do IBGE são validados,
+              pareados por código territorial de 7 dígitos e cruzados para gerar
+              volumes absolutos e taxas proporcionais por 100 mil habitantes. O
+              CrimeMap possui arquitetura preparada para série histórica multi-ano,
+              incorporando novos anos consolidados progressivamente.
             </p>
           </div>
         </div>
@@ -228,13 +220,13 @@ export default function DataSources() {
         <div className="warning-stripes" />
         <AlertTriangle size={28} color="#e12c2c" style={{ flexShrink: 0, marginTop: 2 }} />
         <div>
-          <h3>Limitações</h3>
+          <h3>Limitações e tratamento de valores indisponíveis (null)</h3>
           <p>
-            Os dados apresentados representam exclusivamente registros existentes nas
-            bases utilizadas e não necessariamente correspondem à totalidade dos
-            crimes ocorridos. Podem existir diferenças de classificação entre órgãos,
-            atrasos de consolidação, lacunas ou inconsistências. A ausência de
-            registros em determinada região não significa ausência de criminalidade.
+            Os indicadores refletem exclusivamente os números consolidados divulgados
+            pelos órgãos oficiais. Quando determinada UF ou município não possui dado
+            reportado para um indicador específico (como ocorre em séries estaduais
+            parciais), o sistema preserva explicitamente o status{' '}
+            <strong>Indisponível (null)</strong> e nunca o converte em zero.
           </p>
         </div>
       </section>

@@ -6,8 +6,6 @@ import SearchResults from './components/SearchResults';
 import AboutProject from './components/AboutProject';
 import DataSources from './components/DataSources';
 import AnalyticsPage from './components/AnalyticsPage';
-import CrimeDetailsModal from './components/CrimeDetailsModal';
-import type { CrimeRecord } from './services/crimeService';
 import './App.css';
 // @ts-ignore
 import MapView from './components/MapView';
@@ -25,14 +23,17 @@ function App() {
 
   const defaultFilters = {
     state: 'all',
+    municipalityCode: 'all',
+    indicatorId: 'homicidio-doloso',
+    metricMode: 'rate' as 'rate' | 'absolute',
+    year: 2025,
     city: 'all',
     neighborhood: 'all',
-    period: '5-years',
+    period: '2025',
     crimeType: 'all',
   };
 
   const [filters, setFilters] = useState(defaultFilters);
-  const [selectedOccurrence, setSelectedOccurrence] = useState<CrimeRecord | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -45,13 +46,24 @@ function App() {
   };
 
   const handleConfirmSearch = (selection: SearchSelection) => {
+    if (selection.stateUf || selection.municipalityCode || selection.indicatorId) {
+      setFilters((prev) => ({
+        ...prev,
+        state: selection.stateUf ?? prev.state,
+        municipalityCode:
+          selection.municipalityCode ??
+          (selection.stateUf && selection.stateUf !== prev.state
+            ? 'all'
+            : prev.municipalityCode),
+        indicatorId: selection.indicatorId ?? prev.indicatorId,
+        city: selection.city ?? 'all',
+      }));
+      setConfirmedSearch(null);
+      setActiveTab('home');
+      return;
+    }
+
     setConfirmedSearch(selection);
-    setFilters((prev) => ({
-      ...prev,
-      city: selection.city ? selection.city : 'all',
-      neighborhood: selection.neighborhood ? selection.neighborhood : 'all',
-      crimeType: selection.crimeType ? selection.crimeType : 'all',
-    }));
     setActiveTab('search');
   };
 
@@ -109,26 +121,13 @@ function App() {
           <>
             <HeaderStats filters={filters} />
             <div className="content-grid">
-              <MapView filters={filters} searchQuery={searchQuery} onSelectOccurrence={(occ) => setSelectedOccurrence(occ)} />
+              <MapView filters={filters} searchQuery={searchQuery} />
               <ChartsPanel filters={filters} />
             </div>
-            <RecentOccurrences filters={filters}
+            <RecentOccurrences
+              filters={filters}
               searchQuery={searchQuery}
-              onSelectOccurrence={(occ) => setSelectedOccurrence(occ)}
-              onViewAll={() => {
-                const targetCity =
-                  filters.city && filters.city !== 'all'
-                    ? filters.city
-                    : 'Vitória da Conquista';
-                handleConfirmSearch({
-                  label: targetCity,
-                  city: filters.city !== 'all' ? filters.city : undefined,
-                  neighborhood:
-                    filters.neighborhood !== 'all' ? filters.neighborhood : undefined,
-                  crimeType:
-                    filters.crimeType !== 'all' ? filters.crimeType : undefined,
-                });
-              }}
+              onViewAll={() => setActiveTab('analytics')}
             />
           </>
         )}
@@ -159,10 +158,6 @@ function App() {
         {activeTab === 'sources' && <DataSources />}
         {activeTab === 'analytics' && <AnalyticsPage filters={filters} />}
       </main>
-      <CrimeDetailsModal
-        occurrence={selectedOccurrence}
-        onClose={() => setSelectedOccurrence(null)}
-      />
     </div>
   );
 }

@@ -4,12 +4,12 @@ import 'leaflet/dist/leaflet.css';
 import { MapPin, Layers, Flame } from 'lucide-react';
 import HeatmapLayer from './HeatmapLayer';
 import { crimeService, BRAZIL_STATES } from '../services/crimeService';
-import type { CrimeRecord, CityMetadata } from '../services/crimeService';
+import type { MunicipalityRankingItem, MetricDisplayMode } from '../types/crime';
 
 interface MapViewProps {
   filters: any;
   searchQuery?: string;
-  onSelectOccurrence?: (occurrence: CrimeRecord) => void;
+  onSelectOccurrence?: (occurrence: any) => void;
 }
 
 function MapCameraController({
@@ -28,65 +28,82 @@ function MapCameraController({
   return null;
 }
 
-export default function MapView({ filters, searchQuery = '', onSelectOccurrence, }: MapViewProps) {
+export default function MapView({ filters }: MapViewProps) {
   const [mapMode, setMapMode] = useState<'map' | 'satellite' | 'heatmap'>('map');
-  const [filteredCrimes, setFilteredCrimes] = useState<CrimeRecord[]>([]);
-  const [cities, setCities] = useState<CityMetadata[]>([]);
+  const [topMunicipalitiesCache, setTopMunicipalitiesCache] = useState<
+    Record<string, MunicipalityRankingItem[]>
+  >({});
+  const [loadingPopupKey, setLoadingPopupKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    crimeService.getCitiesMetadata().then((list) => {
-      if (active) setCities(list);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const indicatorId: string = filters.indicatorId || 'homicidio-doloso';
+  const metricMode: MetricDisplayMode = filters.metricMode || 'rate';
+  const stateUf: string = filters.state || 'all';
 
-  useEffect(() => {
-    let active = true;
+  const catalog = useMemo(() => crimeService.getOfficialIndicatorsCatalog(), []);
+  const currentIndicator = useMemo(
+    () => catalog.find((c) => c.id === indicatorId) ?? catalog[0],
+    [catalog, indicatorId]
+  );
+
+  const isMunicipalIndicator =
+    currentIndicator?.granularity === 'state_and_municipality';
+
+  const loadTopMunicipalitiesForUf = (uf: string) => {
+    if (!isMunicipalIndicator) return;
+    const cacheKey = `${uf}::${indicatorId}::${metricMode}`;
+    if (topMunicipalitiesCache[cacheKey] || loadingPopupKey === cacheKey) return;
+
+    setLoadingPopupKey(cacheKey);
     crimeService
-      .getFilteredRecords({
-        state: filters.state,
-        city: filters.city,
-        neighborhood: filters.neighborhood,
-        period: filters.period,
-        crimeType: filters.crimeType,
-        searchQuery,
+      .getOfficialMunicipalityRanking(uf, indicatorId, metricMode)
+      .then((ranking) => {
+        setTopMunicipalitiesCache((prev) => ({
+          ...prev,
+          [cacheKey]: ranking.slice(0, 3),
+        }));
       })
-      .then((records) => {
-        if (active) setFilteredCrimes(records);
+      .finally(() => {
+        setLoadingPopupKey((prev) => (prev === cacheKey ? null : prev));
       });
-    return () => {
-      active = false;
-    };
-  }, [filters, searchQuery]);
+  };
+
+  useEffect(() => {
+    if (stateUf !== 'all' && isMunicipalIndicator) {
+      loadTopMunicipalitiesForUf(stateUf);
+    }
+  }, [stateUf, isMunicipalIndicator, indicatorId, metricMode]);
+
+  const stateNodes = useMemo(() => {
+    const ranking = crimeService.getOfficialStateRanking(indicatorId, metricMode);
+    const rankByUf = new Map(
+      ranking.map((item, index) => [item.uf, { ...item, rank: index + 1 }])
+    );
+    const maxMetric = ranking.reduce((acc, item) => Math.max(acc, item.metricValue), 0);
+
+    return BRAZIL_STATES.map((st) => {
+      const rankedData = rankByUf.get(st.uf) ?? null;
+      const summary = crimeService.getOfficialIndicatorSummary(indicatorId, st.uf);
+      const ratio =
+        rankedData && maxMetric > 0 ? rankedData.metricValue / maxMetric : 0;
+      const radius = rankedData ? Math.max(9, Math.round(9 + ratio * 17)) : 7;
+      const isSelected = stateUf !== 'all' && st.uf === stateUf;
+
+      return {
+        uf: st.uf,
+        name: st.name,
+        coords: st.coords,
+        rankedData,
+        population: rankedData?.population ?? summary.population,
+        totalRankedCount: ranking.length,
+        radius,
+        isSelected,
+      };
+    });
+  }, [indicatorId, metricMode, stateUf]);
 
   const { cameraCenter, cameraZoom } = useMemo(() => {
-    if (
-      filters.neighborhood &&
-      filters.neighborhood !== 'all' &&
-      filteredCrimes.length > 0
-    ) {
-      return {
-        cameraCenter: filteredCrimes[0].coords as [number, number],
-        cameraZoom: 15,
-      };
-    }
-
-    const selectedCityMeta = cities.find(
-      (c) => c.name.toLowerCase() === (filters.city || '').toLowerCase()
-    );
-
-    if (selectedCityMeta) {
-      return {
-        cameraCenter: selectedCityMeta.coords,
-        cameraZoom: selectedCityMeta.zoom,
-      };
-    }
-
     const selectedStateMeta = BRAZIL_STATES.find(
-      (s) => s.uf.toLowerCase() === (filters.state || '').toLowerCase()
+      (s) => s.uf.toLowerCase() === stateUf.toLowerCase()
     );
 
     if (selectedStateMeta) {
@@ -96,47 +113,65 @@ export default function MapView({ filters, searchQuery = '', onSelectOccurrence,
       };
     }
 
-    if (filters.city === 'all' && (!filters.state || filters.state === 'all')) {
-      return {
-        cameraCenter: [-14.235, -51.9253] as [number, number],
-        cameraZoom: 4,
-      };
-    }
-
     return {
-      cameraCenter: [-14.8661, -40.8394] as [number, number],
-      cameraZoom: 13,
+      cameraCenter: [-14.235, -51.9253] as [number, number],
+      cameraZoom: 4,
     };
-  }, [filters.state, filters.city, filters.neighborhood, cities, filteredCrimes]);
+  }, [stateUf]);
 
-  const intensity =
-    filters.period === '1-year' ? 0.7 : filters.period === '6-months' ? 0.45 : 1.0;
+  const heatPoints: [number, number, number][] = useMemo(() => {
+    const validNodes = stateNodes.filter(
+      (node) => node.rankedData !== null && node.rankedData.metricValue > 0
+    );
+    const maxMetric = validNodes.reduce(
+      (acc, node) => Math.max(acc, node.rankedData!.metricValue),
+      0
+    );
 
-  const heatPoints: [number, number, number][] = filteredCrimes.map((item) => [
-    item.coords[0],
-    item.coords[1],
-    intensity,
-  ]);
+    if (maxMetric <= 0) return [];
+
+    return validNodes.map((node) => {
+      const normalizedIntensity = Math.max(
+        0.2,
+        node.rankedData!.metricValue / maxMetric
+      );
+      return [node.coords[0], node.coords[1], normalizedIntensity];
+    });
+  }, [stateNodes]);
 
   return (
     <div className="map-card">
-      <div className="map-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-        <div className="map-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div
+        className="map-header"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '10px',
+        }}
+      >
+        <div
+          className="map-title"
+          style={{ display: 'flex', alignItems: 'center', gap: '10px' }}
+        >
           <MapPin size={20} color="#e12c2c" />
-          <h3 style={{ margin: 0 }}>Mapa de Criminalidade</h3>
+          <h3 style={{ margin: 0 }}>
+            Distribuição Estadual — {currentIndicator?.label}
+          </h3>
           <span
             style={{
               fontSize: '11px',
               fontWeight: 600,
               padding: '2px 8px',
               borderRadius: '999px',
-              backgroundColor: 'rgba(245, 158, 11, 0.14)',
-              border: '1px solid rgba(245, 158, 11, 0.35)',
-              color: '#fbbf24',
+              backgroundColor: 'rgba(16, 185, 129, 0.14)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              color: '#34d399',
             }}
-            title="Municípios carregados via API oficial do IBGE; ocorrências geradas para demonstração."
+            title="Dados oficiais consolidados do MJSP/Sinesp VDE 2025 cruzados com estimativas populacionais do IBGE 2025."
           >
-            Base Demonstrativa
+            MJSP / Sinesp VDE 2025 + IBGE
           </span>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -215,37 +250,144 @@ export default function MapView({ filters, searchQuery = '', onSelectOccurrence,
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             />
           )}
+          {mapMode === 'heatmap' && (
+            <HeatmapLayer
+              key={`${indicatorId}-${metricMode}-${stateUf}-heatmap`}
+              points={heatPoints}
+            />
+          )}
+          {mapMode !== 'heatmap' &&
+            stateNodes.map((node) => {
+              const hasData = node.rankedData !== null;
+              const cacheKey = `${node.uf}::${indicatorId}::${metricMode}`;
+              const topMun = topMunicipalitiesCache[cacheKey];
+              const isLoadingMun = loadingPopupKey === cacheKey;
 
-          <HeatmapLayer key={`${filters.city}-${filters.neighborhood}-${filters.period}-${filters.crimeType}-${mapMode}`}
-            points={heatPoints} />
-
-          {mapMode === 'map' &&
-            filteredCrimes.map((crime) => (
-              <CircleMarker
-                key={crime.id}
-                center={crime.coords}
-                radius={7}
-                eventHandlers={{
-                  click: () => {
-                    if (onSelectOccurrence) {
-                      onSelectOccurrence(crime);
-                    }
-                  },
-                }}
-                pathOptions={{
-                  color: '#ff6b6b',
-                  fillColor: '#e12c2c',
-                  fillOpacity: 0.9,
-                  weight: 2,
-                }}
-              >
-                <Popup>
-                  <strong>{crime.type}</strong> — {crime.neighborhood}
-                  <br />
-                  {crime.description}
-                </Popup>
-              </CircleMarker>
-            ))}
+              return (
+                <CircleMarker
+                  key={node.uf}
+                  center={node.coords}
+                  radius={node.radius}
+                  eventHandlers={{
+                    popupopen: () => loadTopMunicipalitiesForUf(node.uf),
+                  }}
+                  pathOptions={{
+                    color: !hasData
+                      ? '#64748b'
+                      : node.isSelected
+                        ? '#ffffff'
+                        : '#ff6b6b',
+                    fillColor: !hasData
+                      ? '#475569'
+                      : node.isSelected
+                        ? '#f59e0b'
+                        : '#e12c2c',
+                    fillOpacity: hasData ? 0.82 : 0.45,
+                    weight: node.isSelected ? 3 : 1.5,
+                  }}
+                >
+                  <Popup>
+                    <div style={{ minWidth: '215px', lineHeight: 1.5 }}>
+                      <strong>
+                        {node.name} ({node.uf})
+                      </strong>
+                      <br />
+                      {hasData && node.rankedData ? (
+                        <>
+                          <span>
+                            Total oficial (2025):{' '}
+                            <strong>
+                              {node.rankedData.value.toLocaleString('pt-BR', {
+                                maximumFractionDigits:
+                                  currentIndicator?.unit === 'kg' ? 2 : 0,
+                              })}{' '}
+                              {currentIndicator?.unitLabel}
+                            </strong>
+                          </span>
+                          {node.rankedData.ratePer100k !== null && (
+                            <>
+                              <br />
+                              <span>
+                                Taxa:{' '}
+                                <strong>
+                                  {node.rankedData.ratePer100k.toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}{' '}
+                                  / 100 mil hab.
+                                </strong>
+                              </span>
+                            </>
+                          )}
+                          <br />
+                          <span>
+                            População IBGE 2025:{' '}
+                            <strong>
+                              {node.population !== null
+                                ? `${node.population.toLocaleString('pt-BR')} hab.`
+                                : 'Indisponível (null)'}
+                            </strong>
+                          </span>
+                          <br />
+                          <span>
+                            Posição nacional:{' '}
+                            <strong>
+                              {node.rankedData.rank}º de {node.totalRankedCount} UFs
+                            </strong>
+                          </span>
+                          {isMunicipalIndicator && (
+                            <div
+                              style={{
+                                marginTop: '6px',
+                                paddingTop: '6px',
+                                borderTop: '1px solid #cbd5e1',
+                                fontSize: '11.5px',
+                              }}
+                            >
+                              <strong>Municípios mais incidentes ({node.uf}):</strong>
+                              {isLoadingMun ? (
+                                <div>Carregando ranking municipal...</div>
+                              ) : topMun && topMun.length > 0 ? (
+                                <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                                  {topMun.map((m) => (
+                                    <li key={m.ibgeCode}>
+                                      {m.municipalityName}:{' '}
+                                      <strong>
+                                        {m.metricValue.toLocaleString('pt-BR', {
+                                          maximumFractionDigits: 2,
+                                        })}
+                                      </strong>{' '}
+                                      ({m.unitLabel})
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <div>Sem registros municipais disponíveis.</div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span>
+                            População IBGE 2025:{' '}
+                            <strong>
+                              {node.population !== null
+                                ? `${node.population.toLocaleString('pt-BR')} hab.`
+                                : 'Indisponível (null)'}
+                            </strong>
+                          </span>
+                          <br />
+                          <span style={{ color: '#64748b' }}>
+                            Dado indisponível (null) na fonte oficial Sinesp VDE 2025.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
         </MapContainer>
       </div>
     </div>

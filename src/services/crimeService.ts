@@ -1,11 +1,60 @@
 import { crimeData, citiesMetadata } from '../data/mockData';
 import type { CrimeRecord as BaseCrimeRecord, CityMetadata } from '../data/mockData';
+import rawStateIndicators from '../data/stateIndicators.json';
+import rawStatePopulation from '../data/statePopulation.json';
+import rawMunicipalityPopulation from '../data/municipalityPopulation.json';
+import type {
+  StateCrimeIndicatorEntry,
+  StatePopulationEntry,
+  MunicipalityPopulationEntry,
+  MunicipalityCrimeIndicatorEntry,
+  EnrichedMunicipalityIndicator,
+  MunicipalityRankingItem,
+  OfficialMunicipalitySummaryStats,
+  IndicatorCatalogMetadata,
+  OfficialIndicatorFilters,
+  OfficialSummaryStats,
+  MetricDisplayMode,
+} from '../types/crime';
 
 export interface CrimeRecord extends BaseCrimeRecord {
   isSimulated?: boolean;
 }
 
-export type { CityMetadata };
+export type {
+  CityMetadata,
+  StateCrimeIndicatorEntry,
+  StatePopulationEntry,
+  MunicipalityPopulationEntry,
+  MunicipalityCrimeIndicatorEntry,
+  EnrichedMunicipalityIndicator,
+  MunicipalityRankingItem,
+  OfficialMunicipalitySummaryStats,
+  IndicatorCatalogMetadata,
+  OfficialIndicatorFilters,
+  OfficialSummaryStats,
+  MetricDisplayMode,
+};
+
+const OFFICIAL_STATE_INDICATORS = rawStateIndicators as StateCrimeIndicatorEntry[];
+const OFFICIAL_STATE_POPULATIONS = rawStatePopulation as StatePopulationEntry[];
+const OFFICIAL_MUNICIPALITY_POPULATIONS =
+  rawMunicipalityPopulation as MunicipalityPopulationEntry[];
+
+const MUNICIPALITY_BY_IBGE_CODE = new Map<string, MunicipalityPopulationEntry>(
+  OFFICIAL_MUNICIPALITY_POPULATIONS.map((m) => [m.ibgeCode, m])
+);
+
+let cachedMunicipalityIndicatorsPromise: Promise<MunicipalityCrimeIndicatorEntry[]> | null = null;
+
+function loadOfficialMunicipalityIndicators(): Promise<MunicipalityCrimeIndicatorEntry[]> {
+  if (!cachedMunicipalityIndicatorsPromise) {
+    cachedMunicipalityIndicatorsPromise = import('../data/municipalityIndicators.json').then(
+      (mod) => mod.default as MunicipalityCrimeIndicatorEntry[]
+    );
+  }
+  return cachedMunicipalityIndicatorsPromise;
+}
 
 export interface CrimeFilters {
   state?: string;
@@ -219,6 +268,330 @@ export const crimeService = {
   getStatesMetadata(): StateMetadata[] {
     return [...BRAZIL_STATES];
   },
+
+  getOfficialPopulations(year = 2025): StatePopulationEntry[] {
+    return OFFICIAL_STATE_POPULATIONS.filter((item) => item.year === year);
+  },
+
+  getOfficialPopulationByUf(uf: string, year = 2025): StatePopulationEntry | null {
+    const normalizedUf = uf.trim().toUpperCase();
+    return (
+      OFFICIAL_STATE_POPULATIONS.find(
+        (item) => item.year === year && item.uf === normalizedUf
+      ) ?? null
+    );
+  },
+
+  getOfficialIndicatorsCatalog(): IndicatorCatalogMetadata[] {
+    const seen = new Map<string, IndicatorCatalogMetadata>();
+    for (const item of OFFICIAL_STATE_INDICATORS) {
+      if (!seen.has(item.indicatorId)) {
+        seen.set(item.indicatorId, {
+          id: item.indicatorId,
+          rawEventName: item.rawEventName,
+          label: item.label,
+          category: item.category,
+          unit: item.unit,
+          unitLabel: item.unitLabel,
+          scope: item.scope,
+          granularity: item.granularity,
+          comparisonMethod: item.comparisonMethod,
+        });
+      }
+    }
+    return Array.from(seen.values());
+  },
+
+  getOfficialStateIndicators(
+    filters?: OfficialIndicatorFilters
+  ): StateCrimeIndicatorEntry[] {
+    const targetYear = filters?.year ?? 2025;
+    return OFFICIAL_STATE_INDICATORS.filter((entry) => {
+      if (entry.year !== targetYear) return false;
+      if (
+        filters?.state &&
+        filters.state !== 'all' &&
+        entry.uf !== filters.state.trim().toUpperCase()
+      ) {
+        return false;
+      }
+      if (
+        filters?.indicatorId &&
+        filters.indicatorId !== 'all' &&
+        entry.indicatorId !== filters.indicatorId
+      ) {
+        return false;
+      }
+      if (
+        filters?.category &&
+        filters.category !== 'all' &&
+        entry.category !== filters.category
+      ) {
+        return false;
+      }
+      return true;
+    });
+  },
+
+  getOfficialIndicatorSummary(
+    indicatorId: string,
+    stateUf = 'all',
+    year = 2025
+  ): OfficialSummaryStats {
+    const catalog = this.getOfficialIndicatorsCatalog();
+    const meta = catalog.find((c) => c.id === indicatorId) ?? null;
+
+    if (!meta) {
+      return {
+        indicator: null,
+        year,
+        selectedUf: stateUf,
+        totalValue: null,
+        population: null,
+        ratePer100k: null,
+        unit: null,
+        unitLabel: '',
+        comparisonMethod: null,
+        availableStatesCount: 0,
+        unavailableStatesCount: 0,
+      };
+    }
+
+    const rows = this.getOfficialStateIndicators({
+      year,
+      indicatorId,
+      state: stateUf,
+    });
+
+    const validRows = rows.filter((r) => r.value !== null);
+    const unavailableStatesCount = rows.length - validRows.length;
+
+    const totalValue =
+      validRows.length > 0
+        ? Number(
+          validRows
+            .reduce((acc, r) => acc + (r.value as number), 0)
+            .toFixed(meta.unit === 'kg' ? 3 : 0)
+        )
+        : null;
+
+    const validPopulation =
+      validRows.length > 0
+        ? validRows.reduce((acc, r) => acc + r.population, 0)
+        : null;
+
+    let ratePer100k: number | null = null;
+    if (
+      meta.comparisonMethod === 'population_per_100k' &&
+      totalValue !== null &&
+      validPopulation !== null &&
+      validPopulation > 0
+    ) {
+      ratePer100k = Number(((totalValue / validPopulation) * 100_000).toFixed(2));
+    }
+
+    return {
+      indicator: meta,
+      year,
+      selectedUf: stateUf === 'all' ? 'all' : stateUf.trim().toUpperCase(),
+      totalValue,
+      population: validPopulation,
+      ratePer100k,
+      unit: meta.unit,
+      unitLabel: meta.unitLabel,
+      comparisonMethod: meta.comparisonMethod,
+      availableStatesCount: validRows.length,
+      unavailableStatesCount,
+    };
+  },
+
+  getOfficialStateRanking(
+    indicatorId: string,
+    mode: MetricDisplayMode = 'rate',
+    year = 2025
+  ): Array<{
+    uf: string;
+    stateName: string;
+    value: number;
+    ratePer100k: number | null;
+    population: number;
+    metricValue: number;
+    unitLabel: string;
+    effectiveMode: MetricDisplayMode;
+  }> {
+    const rows = this.getOfficialStateIndicators({ year, indicatorId });
+    const first = rows[0];
+    if (!first) return [];
+
+    const effectiveMode: MetricDisplayMode =
+      first.comparisonMethod === 'population_per_100k' ? mode : 'absolute';
+
+    return rows
+      .filter((r) => {
+        if (r.value === null) return false;
+        if (effectiveMode === 'rate' && r.ratePer100k === null) return false;
+        return true;
+      })
+      .map((r) => ({
+        uf: r.uf,
+        stateName: r.stateName,
+        value: r.value as number,
+        ratePer100k: r.ratePer100k,
+        population: r.population,
+        metricValue:
+          effectiveMode === 'rate'
+            ? (r.ratePer100k as number)
+            : (r.value as number),
+        unitLabel:
+          effectiveMode === 'rate' ? 'por 100 mil hab.' : r.unitLabel,
+        effectiveMode,
+      }))
+      .sort((a, b) => b.metricValue - a.metricValue);
+  },
+  indicatorSupportsMunicipalities(indicatorId: string): boolean {
+    const meta = this.getOfficialIndicatorsCatalog().find((c) => c.id === indicatorId);
+    return meta?.granularity === 'state_and_municipality';
+  },
+
+  getOfficialMunicipalitiesByState(stateUf: string): MunicipalityPopulationEntry[] {
+    if (!stateUf || stateUf === 'all') return [];
+    const normalizedUf = stateUf.trim().toUpperCase();
+    return OFFICIAL_MUNICIPALITY_POPULATIONS.filter((m) => m.uf === normalizedUf);
+  },
+
+  getOfficialMunicipalityByCode(ibgeCode: string): MunicipalityPopulationEntry | null {
+    return MUNICIPALITY_BY_IBGE_CODE.get(ibgeCode.trim()) ?? null;
+  },
+
+  async getOfficialMunicipalityIndicators(params: {
+    uf?: string;
+    ibgeCode?: string;
+    indicatorId: string;
+  }): Promise<EnrichedMunicipalityIndicator[]> {
+    const meta = this.getOfficialIndicatorsCatalog().find(
+      (c) => c.id === params.indicatorId
+    );
+    if (!meta || meta.granularity !== 'state_and_municipality') {
+      return [];
+    }
+
+    const allMunicipal = await loadOfficialMunicipalityIndicators();
+    const normalizedUf = params.uf && params.uf !== 'all' ? params.uf.trim().toUpperCase() : null;
+    const normalizedCode =
+      params.ibgeCode && params.ibgeCode !== 'all' ? params.ibgeCode.trim() : null;
+
+    const results: EnrichedMunicipalityIndicator[] = [];
+    for (const row of allMunicipal) {
+      if (row.indicatorId !== params.indicatorId) continue;
+      if (normalizedUf && row.uf !== normalizedUf) continue;
+      if (normalizedCode && row.ibgeCode !== normalizedCode) continue;
+
+      const munMeta = MUNICIPALITY_BY_IBGE_CODE.get(row.ibgeCode);
+      if (!munMeta) continue;
+
+      results.push({
+        ...row,
+        municipalityName: munMeta.name,
+        population: munMeta.population,
+        unit: meta.unit,
+        unitLabel: meta.unitLabel,
+        comparisonMethod: meta.comparisonMethod,
+      });
+    }
+
+    return results;
+  },
+
+  async getOfficialMunicipalityRanking(
+    stateUf: string,
+    indicatorId: string,
+    mode: MetricDisplayMode = 'rate'
+  ): Promise<MunicipalityRankingItem[]> {
+    if (!stateUf || stateUf === 'all') return [];
+
+    const rows = await this.getOfficialMunicipalityIndicators({
+      uf: stateUf,
+      indicatorId,
+    });
+    const first = rows[0];
+    if (!first) return [];
+
+    const effectiveMode: MetricDisplayMode =
+      first.comparisonMethod === 'population_per_100k' ? mode : 'absolute';
+
+    return rows
+      .filter((r) => {
+        if (r.value === null) return false;
+        if (effectiveMode === 'rate' && r.ratePer100k === null) return false;
+        return true;
+      })
+      .map((r) => ({
+        ibgeCode: r.ibgeCode,
+        uf: r.uf,
+        municipalityName: r.municipalityName,
+        value: r.value as number,
+        ratePer100k: r.ratePer100k,
+        population: r.population,
+        metricValue:
+          effectiveMode === 'rate'
+            ? (r.ratePer100k as number)
+            : (r.value as number),
+        unitLabel:
+          effectiveMode === 'rate' ? 'por 100 mil hab.' : r.unitLabel,
+        effectiveMode,
+      }))
+      .sort((a, b) => b.metricValue - a.metricValue);
+  },
+
+  async getOfficialMunicipalitySummary(
+    ibgeCode: string,
+    indicatorId: string,
+    mode: MetricDisplayMode = 'rate'
+  ): Promise<OfficialMunicipalitySummaryStats> {
+    const meta =
+      this.getOfficialIndicatorsCatalog().find((c) => c.id === indicatorId) ?? null;
+    const munMeta = this.getOfficialMunicipalityByCode(ibgeCode);
+
+    if (!meta || !munMeta || meta.granularity !== 'state_and_municipality') {
+      return {
+        indicator: meta,
+        municipality: munMeta,
+        value: null,
+        ratePer100k: null,
+        unit: meta?.unit ?? null,
+        unitLabel: meta?.unitLabel ?? '',
+        comparisonMethod: meta?.comparisonMethod ?? null,
+        stateRankPosition: null,
+        stateRankedTotalCount: 0,
+      };
+    }
+
+    const [munRow] = await this.getOfficialMunicipalityIndicators({
+      uf: munMeta.uf,
+      ibgeCode: munMeta.ibgeCode,
+      indicatorId,
+    });
+
+    const ranking = await this.getOfficialMunicipalityRanking(
+      munMeta.uf,
+      indicatorId,
+      mode
+    );
+    const rankIndex = ranking.findIndex((item) => item.ibgeCode === munMeta.ibgeCode);
+
+    return {
+      indicator: meta,
+      municipality: munMeta,
+      value: munRow ? munRow.value : null,
+      ratePer100k: munRow ? munRow.ratePer100k : null,
+      unit: meta.unit,
+      unitLabel: meta.unitLabel,
+      comparisonMethod: meta.comparisonMethod,
+      stateRankPosition: rankIndex >= 0 ? rankIndex + 1 : null,
+      stateRankedTotalCount: ranking.length,
+    };
+  },
+
   async getAllRecords(): Promise<CrimeRecord[]> {
     const base = getBaseRecordsWithFlags();
     const featuredStates: Array<{ uf: string; sampleCount: number }> = [

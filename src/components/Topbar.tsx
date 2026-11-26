@@ -5,10 +5,13 @@ import {
     ShieldAlert,
     Menu,
 } from 'lucide-react';
-import { citiesMetadata, crimeData } from '../data/mockData';
+import { crimeService, BRAZIL_STATES } from '../services/crimeService';
 
 export interface SearchSelection {
     label: string;
+    stateUf?: string;
+    municipalityCode?: string;
+    indicatorId?: string;
     city?: string;
     neighborhood?: string;
     crimeType?: string;
@@ -16,7 +19,7 @@ export interface SearchSelection {
 
 interface SuggestionItem extends SearchSelection {
     id: string;
-    category: 'Cidade' | 'Bairro' | 'Ocorrência';
+    category: 'Estado (UF)' | 'Município' | 'Indicador';
     subtitle?: string;
 }
 
@@ -63,58 +66,29 @@ export default function Topbar({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const allSuggestions = useMemo<SuggestionItem[]>(() => {
+    const staticSuggestions = useMemo<SuggestionItem[]>(() => {
         const items: SuggestionItem[] = [];
 
-        citiesMetadata.forEach((c) => {
+        BRAZIL_STATES.forEach((st) => {
             items.push({
-                id: `city-${c.name}`,
-                label: `${c.name} - ${c.state}`,
-                category: 'Cidade',
-                subtitle: 'Município monitorado',
-                city: c.name,
+                id: `uf-${st.uf}`,
+                label: `${st.name} (${st.uf})`,
+                category: 'Estado (UF)',
+                subtitle: 'Unidade da Federação — Sinesp VDE / IBGE',
+                stateUf: st.uf,
             });
         });
 
-        const uniqueNeighborhoods = Array.from(
-            new Set(crimeData.map((r) => `${r.neighborhood}|${r.city}|${r.state}`))
-        );
-        uniqueNeighborhoods.forEach((entry) => {
-            const [neighborhood, city, state] = entry.split('|');
+        crimeService.getOfficialIndicatorsCatalog().forEach((ind) => {
             items.push({
-                id: `neigh-${neighborhood}-${city}`,
-                label: `${neighborhood}, ${city}`,
-                category: 'Bairro',
-                subtitle: `${city} - ${state}`,
-                city,
-                neighborhood,
-            });
-        });
-
-        const uniqueTypes = Array.from(new Set(crimeData.map((r) => r.type)));
-        uniqueTypes.forEach((type) => {
-            items.push({
-                id: `type-${type}`,
-                label: type,
-                category: 'Ocorrência',
-                subtitle: 'Tipo de ocorrência',
-                crimeType: type,
-            });
-        });
-
-        const uniqueCombos = Array.from(
-            new Set(crimeData.map((r) => `${r.type}|${r.neighborhood}|${r.city}`))
-        );
-        uniqueCombos.forEach((entry) => {
-            const [type, neighborhood, city] = entry.split('|');
-            items.push({
-                id: `combo-${type}-${neighborhood}-${city}`,
-                label: `${type} em ${neighborhood}`,
-                category: 'Ocorrência',
-                subtitle: `${neighborhood}, ${city}`,
-                city,
-                neighborhood,
-                crimeType: type,
+                id: `ind-${ind.id}`,
+                label: ind.label,
+                category: 'Indicador',
+                subtitle:
+                    ind.granularity === 'state_and_municipality'
+                        ? `Indicador Sinesp VDE (${ind.unitLabel}) — Estadual e Municipal`
+                        : `Indicador Sinesp VDE (${ind.unitLabel}) — Estadual`,
+                indicatorId: ind.id,
             });
         });
 
@@ -124,15 +98,41 @@ export default function Topbar({
     const filteredSuggestions = useMemo(() => {
         const q = debouncedQuery.trim().toLowerCase();
         if (!q) return [];
-        return allSuggestions
-            .filter(
-                (item) =>
-                    item.label.toLowerCase().includes(q) ||
-                    (item.subtitle && item.subtitle.toLowerCase().includes(q)) ||
-                    item.category.toLowerCase().includes(q)
-            )
-            .slice(0, 7);
-    }, [debouncedQuery, allSuggestions]);
+
+        const matchedStatic = staticSuggestions.filter(
+            (item) =>
+                item.label.toLowerCase().includes(q) ||
+                (item.subtitle && item.subtitle.toLowerCase().includes(q)) ||
+                item.category.toLowerCase().includes(q)
+        );
+
+        const matchedMunicipalities: SuggestionItem[] = [];
+        if (q.length >= 2) {
+            for (const st of BRAZIL_STATES) {
+                const muns = crimeService.getOfficialMunicipalitiesByState(st.uf);
+                for (const m of muns) {
+                    if (
+                        m.name.toLowerCase().includes(q) ||
+                        m.ibgeCode.startsWith(q)
+                    ) {
+                        matchedMunicipalities.push({
+                            id: `mun-${m.ibgeCode}`,
+                            label: `${m.name} (${m.uf})`,
+                            category: 'Município',
+                            subtitle: `IBGE ${m.ibgeCode} • Pop. ${m.population.toLocaleString('pt-BR')} hab.`,
+                            stateUf: m.uf,
+                            municipalityCode: m.ibgeCode,
+                            city: m.name,
+                        });
+                    }
+                    if (matchedMunicipalities.length >= 5) break;
+                }
+                if (matchedMunicipalities.length >= 5) break;
+            }
+        }
+
+        return [...matchedStatic, ...matchedMunicipalities].slice(0, 8);
+    }, [debouncedQuery, staticSuggestions]);
 
     const handleSelect = (item: SearchSelection) => {
         setSearchQuery(item.label);
@@ -174,8 +174,8 @@ export default function Topbar({
     };
 
     const renderCategoryIcon = (category: SuggestionItem['category']) => {
-        if (category === 'Cidade') return <Building2 size={16} className="suggestion-icon" />;
-        if (category === 'Bairro') return <MapPin size={16} className="suggestion-icon" />;
+        if (category === 'Estado (UF)') return <MapPin size={16} className="suggestion-icon" />;
+        if (category === 'Município') return <Building2 size={16} className="suggestion-icon" />;
         return <ShieldAlert size={16} className="suggestion-icon" />;
     };
     return (
@@ -197,7 +197,7 @@ export default function Topbar({
                         <Search size={18} className="search-icon" />
                         <input
                             type="text"
-                            placeholder="Buscar por cidade, bairro ou tipo de ocorrência..."
+                            placeholder="Buscar por estado (UF), município (IBGE) ou indicador..."
                             value={searchQuery}
                             onFocus={() => setIsOpen(true)}
                             onChange={(e) => {
