@@ -1,10 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, Layers, Flame } from 'lucide-react';
 import HeatmapLayer from './HeatmapLayer';
 import { crimeService, BRAZIL_STATES } from '../services/crimeService';
 import type { MunicipalityRankingItem, MetricDisplayMode } from '../types/crime';
+
+let cachedBrazilStatesGeoJson: any = null;
+const BRAZIL_STATES_GEOJSON_URL =
+  'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson';
 
 interface MapViewProps {
   filters: any;
@@ -34,6 +39,25 @@ export default function MapView({ filters }: MapViewProps) {
     Record<string, MunicipalityRankingItem[]>
   >({});
   const [loadingPopupKey, setLoadingPopupKey] = useState<string | null>(null);
+
+  const [statesGeoJson, setStatesGeoJson] = useState<any>(cachedBrazilStatesGeoJson);
+  const [selectedPopupNode, setSelectedPopupNode] = useState<any>(null);
+  const popupLayerRef = useRef<L.Popup | null>(null);
+
+  useEffect(() => {
+    if (cachedBrazilStatesGeoJson) return;
+    let active = true;
+    fetch(BRAZIL_STATES_GEOJSON_URL)
+      .then((res) => res.json())
+      .then((data) => {
+        cachedBrazilStatesGeoJson = data;
+        if (active) setStatesGeoJson(data);
+      })
+      .catch((err) => console.error('Erro ao carregar malha dos estados:', err));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const indicatorId: string = filters.indicatorId || 'homicidio-doloso';
   const metricMode: MetricDisplayMode = filters.metricMode || 'rate';
@@ -73,19 +97,16 @@ export default function MapView({ filters }: MapViewProps) {
     }
   }, [stateUf, isMunicipalIndicator, indicatorId, metricMode]);
 
-  const stateNodes = useMemo(() => {
+  const { stateNodes, nodeByUf, maxMetric } = useMemo(() => {
     const ranking = crimeService.getOfficialStateRanking(indicatorId, metricMode);
     const rankByUf = new Map(
       ranking.map((item, index) => [item.uf, { ...item, rank: index + 1 }])
     );
-    const maxMetric = ranking.reduce((acc, item) => Math.max(acc, item.metricValue), 0);
+    const computedMax = ranking.reduce((acc, item) => Math.max(acc, item.metricValue), 0);
 
-    return BRAZIL_STATES.map((st) => {
+    const nodes = BRAZIL_STATES.map((st) => {
       const rankedData = rankByUf.get(st.uf) ?? null;
       const summary = crimeService.getOfficialIndicatorSummary(indicatorId, st.uf);
-      const ratio =
-        rankedData && maxMetric > 0 ? rankedData.metricValue / maxMetric : 0;
-      const radius = rankedData ? Math.max(9, Math.round(9 + ratio * 17)) : 7;
       const isSelected = stateUf !== 'all' && st.uf === stateUf;
 
       return {
@@ -95,11 +116,30 @@ export default function MapView({ filters }: MapViewProps) {
         rankedData,
         population: rankedData?.population ?? summary.population,
         totalRankedCount: ranking.length,
-        radius,
         isSelected,
       };
     });
+
+    const mapByUf = new Map(nodes.map((n) => [n.uf.toUpperCase(), n]));
+
+    return {
+      stateNodes: nodes,
+      nodeByUf: mapByUf,
+      maxMetric: computedMax,
+    };
   }, [indicatorId, metricMode, stateUf]);
+
+  const getChoroplethFillColor = (metricValue: number | null | undefined): string => {
+    if (metricValue == null || metricValue <= 0 || maxMetric <= 0) {
+      return '#262934';
+    }
+    const ratio = metricValue / maxMetric;
+    if (ratio > 0.8) return '#5c0a14';
+    if (ratio > 0.6) return '#85121e';
+    if (ratio > 0.4) return '#ad1d29';
+    if (ratio > 0.2) return '#cf3644';
+    return '#e25563';
+  };
 
   const { cameraCenter, cameraZoom } = useMemo(() => {
     const selectedStateMeta = BRAZIL_STATES.find(
@@ -256,139 +296,210 @@ export default function MapView({ filters }: MapViewProps) {
               points={heatPoints}
             />
           )}
-          {mapMode !== 'heatmap' &&
-            stateNodes.map((node) => {
-              const hasData = node.rankedData !== null;
-              const cacheKey = `${node.uf}::${indicatorId}::${metricMode}`;
-              const topMun = topMunicipalitiesCache[cacheKey];
-              const isLoadingMun = loadingPopupKey === cacheKey;
+          {mapMode !== 'heatmap' && statesGeoJson && (
+            <GeoJSON
+              key={`${indicatorId}-${metricMode}-${stateUf}-${mapMode}`}
+              data={statesGeoJson}
+              style={(feature) => {
+                const uf = String(feature?.properties?.sigla || '').toUpperCase();
+                const node = nodeByUf.get(uf);
+                const metricVal = node?.rankedData?.metricValue ?? null;
+                const isSelected = Boolean(node?.isSelected);
 
-              return (
-                <CircleMarker
-                  key={node.uf}
-                  center={node.coords}
-                  radius={node.radius}
-                  eventHandlers={{
-                    popupopen: () => loadTopMunicipalitiesForUf(node.uf),
-                  }}
-                  pathOptions={{
-                    color: !hasData
-                      ? '#64748b'
-                      : node.isSelected
-                        ? '#ffffff'
-                        : '#ff6b6b',
-                    fillColor: !hasData
-                      ? '#475569'
-                      : node.isSelected
-                        ? '#f59e0b'
-                        : '#e12c2c',
-                    fillOpacity: hasData ? 0.82 : 0.45,
-                    weight: node.isSelected ? 3 : 1.5,
-                  }}
-                >
-                  <Popup>
-                    <div style={{ minWidth: '215px', lineHeight: 1.5 }}>
+                return {
+                  fillColor: getChoroplethFillColor(metricVal),
+                  fillOpacity:
+                    metricVal === null
+                      ? 0.35
+                      : mapMode === 'satellite'
+                        ? 0.58
+                        : 0.82,
+                  color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.24)',
+                  weight: isSelected ? 2.4 : 1,
+                };
+              }}
+              onEachFeature={(feature, layer) => {
+                const uf = String(feature?.properties?.sigla || '').toUpperCase();
+                const node = nodeByUf.get(uf);
+                const stateName = node?.name || feature?.properties?.name || uf;
+                const ranked = node?.rankedData;
+
+                const formattedMetric = ranked
+                  ? metricMode === 'rate' && ranked.ratePer100k !== null
+                    ? `${ranked.ratePer100k.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })} / 100 mil hab.`
+                    : `${ranked.value.toLocaleString('pt-BR', {
+                      maximumFractionDigits: currentIndicator?.unit === 'kg' ? 2 : 0,
+                    })} ${currentIndicator?.unitLabel || ''}`
+                  : 'Dado indisponível (null)';
+
+                layer.bindTooltip(
+                  `<div>
+                    <strong>${stateName} (${uf})</strong><br/>
+                    <span style="opacity:0.85">${currentIndicator?.label}:</span> <strong>${formattedMetric}</strong>
+                  </div>`,
+                  {
+                    sticky: true,
+                    direction: 'top',
+                    className: 'choropleth-tooltip',
+                  }
+                );
+
+                layer.on({
+                  mouseover: (e) => {
+                    const target = e.target as L.Path;
+                    target.setStyle({
+                      weight: 2.2,
+                      color: '#fca5a5',
+                      fillOpacity: mapMode === 'satellite' ? 0.72 : 0.92,
+                    });
+                    target.bringToFront();
+                  },
+                  mouseout: (e) => {
+                    const target = e.target as L.Path;
+                    const isSelected = Boolean(node?.isSelected);
+                    target.setStyle({
+                      weight: isSelected ? 2.4 : 1,
+                      color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.24)',
+                      fillOpacity:
+                        ranked == null
+                          ? 0.35
+                          : mapMode === 'satellite'
+                            ? 0.58
+                            : 0.82,
+                    });
+                  },
+                  click: () => {
+                    if (!node) return;
+                    loadTopMunicipalitiesForUf(node.uf);
+                    setSelectedPopupNode(node);
+                  },
+                });
+              }}
+            />
+          )}
+
+          {mapMode !== 'heatmap' && selectedPopupNode && (
+            <Popup
+              ref={popupLayerRef}
+              position={selectedPopupNode.coords}
+              eventHandlers={{
+                remove: () => setSelectedPopupNode(null),
+              }}
+            >
+              <div style={{ minWidth: '215px', lineHeight: 1.5 }}>
+                <strong>
+                  {selectedPopupNode.name} ({selectedPopupNode.uf})
+                </strong>
+                <br />
+                {selectedPopupNode.rankedData !== null && selectedPopupNode.rankedData ? (
+                  <>
+                    <span>
+                      Total oficial (2025):{' '}
                       <strong>
-                        {node.name} ({node.uf})
+                        {selectedPopupNode.rankedData.value.toLocaleString('pt-BR', {
+                          maximumFractionDigits:
+                            currentIndicator?.unit === 'kg' ? 2 : 0,
+                        })}{' '}
+                        {currentIndicator?.unitLabel}
                       </strong>
-                      <br />
-                      {hasData && node.rankedData ? (
-                        <>
-                          <span>
-                            Total oficial (2025):{' '}
-                            <strong>
-                              {node.rankedData.value.toLocaleString('pt-BR', {
-                                maximumFractionDigits:
-                                  currentIndicator?.unit === 'kg' ? 2 : 0,
-                              })}{' '}
-                              {currentIndicator?.unitLabel}
-                            </strong>
-                          </span>
-                          {node.rankedData.ratePer100k !== null && (
-                            <>
-                              <br />
-                              <span>
-                                Taxa:{' '}
+                    </span>
+                    {selectedPopupNode.rankedData.ratePer100k !== null && (
+                      <>
+                        <br />
+                        <span>
+                          Taxa:{' '}
+                          <strong>
+                            {selectedPopupNode.rankedData.ratePer100k.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}{' '}
+                            / 100 mil hab.
+                          </strong>
+                        </span>
+                      </>
+                    )}
+                    <br />
+                    <span>
+                      População IBGE 2025:{' '}
+                      <strong>
+                        {selectedPopupNode.population !== null
+                          ? `${selectedPopupNode.population.toLocaleString('pt-BR')} hab.`
+                          : 'Indisponível (null)'}
+                      </strong>
+                    </span>
+                    <br />
+                    <span>
+                      Posição nacional:{' '}
+                      <strong>
+                        {selectedPopupNode.rankedData.rank}º de {selectedPopupNode.totalRankedCount} UFs
+                      </strong>
+                    </span>
+                    {isMunicipalIndicator && (
+                      <div
+                        style={{
+                          marginTop: '6px',
+                          paddingTop: '6px',
+                          borderTop: '1px solid #cbd5e1',
+                          fontSize: '11.5px',
+                        }}
+                      >
+                        <strong>Municípios mais incidentes ({selectedPopupNode.uf}):</strong>
+                        {loadingPopupKey === `${selectedPopupNode.uf}::${indicatorId}::${metricMode}` ? (
+                          <div>Carregando ranking municipal...</div>
+                        ) : topMunicipalitiesCache[`${selectedPopupNode.uf}::${indicatorId}::${metricMode}`]?.length > 0 ? (
+                          <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                            {topMunicipalitiesCache[`${selectedPopupNode.uf}::${indicatorId}::${metricMode}`].map((m) => (
+                              <li key={m.ibgeCode}>
+                                {m.municipalityName}:{' '}
                                 <strong>
-                                  {node.rankedData.ratePer100k.toLocaleString('pt-BR', {
-                                    minimumFractionDigits: 2,
+                                  {m.metricValue.toLocaleString('pt-BR', {
                                     maximumFractionDigits: 2,
-                                  })}{' '}
-                                  / 100 mil hab.
-                                </strong>
-                              </span>
-                            </>
-                          )}
-                          <br />
-                          <span>
-                            População IBGE 2025:{' '}
-                            <strong>
-                              {node.population !== null
-                                ? `${node.population.toLocaleString('pt-BR')} hab.`
-                                : 'Indisponível (null)'}
-                            </strong>
-                          </span>
-                          <br />
-                          <span>
-                            Posição nacional:{' '}
-                            <strong>
-                              {node.rankedData.rank}º de {node.totalRankedCount} UFs
-                            </strong>
-                          </span>
-                          {isMunicipalIndicator && (
-                            <div
-                              style={{
-                                marginTop: '6px',
-                                paddingTop: '6px',
-                                borderTop: '1px solid #cbd5e1',
-                                fontSize: '11.5px',
-                              }}
-                            >
-                              <strong>Municípios mais incidentes ({node.uf}):</strong>
-                              {isLoadingMun ? (
-                                <div>Carregando ranking municipal...</div>
-                              ) : topMun && topMun.length > 0 ? (
-                                <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                                  {topMun.map((m) => (
-                                    <li key={m.ibgeCode}>
-                                      {m.municipalityName}:{' '}
-                                      <strong>
-                                        {m.metricValue.toLocaleString('pt-BR', {
-                                          maximumFractionDigits: 2,
-                                        })}
-                                      </strong>{' '}
-                                      ({m.unitLabel})
-                                    </li>
-                                  ))}
-                                </ol>
-                              ) : (
-                                <div>Sem registros municipais disponíveis.</div>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span>
-                            População IBGE 2025:{' '}
-                            <strong>
-                              {node.population !== null
-                                ? `${node.population.toLocaleString('pt-BR')} hab.`
-                                : 'Indisponível (null)'}
-                            </strong>
-                          </span>
-                          <br />
-                          <span style={{ color: '#64748b' }}>
-                            Dado indisponível (null) na fonte oficial Sinesp VDE 2025.
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </Popup>
-                </CircleMarker>
-              );
-            })}
+                                  })}
+                                </strong>{' '}
+                                ({m.unitLabel})
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <div>Sem registros municipais disponíveis.</div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      População IBGE 2025:{' '}
+                      <strong>
+                        {selectedPopupNode.population !== null
+                          ? `${selectedPopupNode.population.toLocaleString('pt-BR')} hab.`
+                          : 'Indisponível (null)'}
+                      </strong>
+                    </span>
+                    <br />
+                    <span style={{ color: '#64748b' }}>
+                      Dado indisponível (null) na fonte oficial Sinesp VDE 2025.
+                    </span>
+                  </>
+                )}
+              </div>
+            </Popup>
+          )}
         </MapContainer>
+
+        {mapMode !== 'heatmap' && maxMetric > 0 && (
+          <div
+            className="choropleth-legend"
+            title={`Escala de ${metricMode === 'rate' ? 'taxa por 100 mil hab.' : currentIndicator?.unitLabel}: 0 até ${maxMetric.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`}
+          >
+            <span>Menor índice</span>
+            <div className="choropleth-legend-bar" />
+            <span>Maior índice</span>
+          </div>
+        )}
       </div>
     </div>
   );
