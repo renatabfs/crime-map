@@ -148,6 +148,33 @@ body {
   flex-direction: column;
   gap: 24px;
   background-color: var(--bg-dark);
+  position: relative;
+  isolation: isolate;
+}
+
+.main-content>* {
+  position: relative;
+  z-index: 2;
+}
+
+.main-content::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 680px;
+  height: 440px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.72;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='680' height='440' viewBox='0 0 680 440'%3E%3Cg fill='none' stroke='%23e12c2c' stroke-width='2.1' stroke-linecap='round'%3E%3Cpath stroke-opacity='0.95' d='M 330 -10 C 390 55, 520 70, 690 10'/%3E%3Cpath stroke-opacity='0.9' d='M 285 -10 C 355 75, 505 95, 690 32'/%3E%3Cpath stroke-opacity='0.82' d='M 240 -10 C 320 95, 490 120, 690 55'/%3E%3Cpath stroke-opacity='0.74' d='M 195 -10 C 285 118, 475 148, 690 80'/%3E%3Cpath stroke-opacity='0.64' d='M 150 -10 C 250 142, 460 176, 690 106'/%3E%3Cpath stroke-opacity='0.52' d='M 105 -10 C 215 166, 445 205, 690 134'/%3E%3Cpath stroke-opacity='0.4' d='M 60 -10 C 180 190, 430 235, 690 164'/%3E%3Cpath stroke-opacity='0.28' d='M 15 -10 C 145 215, 415 265, 690 196'/%3E%3Cpath stroke-opacity='0.16' d='M -20 10 C 110 240, 400 295, 690 230'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right top;
+  background-size: 680px 440px;
+}
+
+[data-theme='light'] .main-content::before {
+  opacity: 0.06;
 }
 
 .header-stats {
@@ -1917,12 +1944,18 @@ body {
 }
 
 .sidebar-bottom-bg {
-  position: absolute;
-  inset: 0;
-  background-image: url('https://images.unsplash.com/photo-1519501025264-65ba15a82390?q=80&w=600&auto=format&fit=crop');
-  background-size: cover;
-  background-position: center;
-  opacity: 0.22;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 280px;
+  height: 520px;
+  background-image:
+    radial-gradient(ellipse at 20% 98%, rgba(225, 44, 44, 0.34) 0%, rgba(225, 44, 44, 0.12) 45%, transparent 72%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='520' viewBox='0 0 280 520'%3E%3Cg fill='none' stroke='%23e12c2c' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath stroke-opacity='0.35' d='M -15 30 C 95 65, 130 195, 72 340 C 38 425, 85 485, 175 530'/%3E%3Cpath stroke-opacity='0.48' d='M -15 58 C 82 92, 114 214, 58 355 C 26 435, 68 492, 148 530'/%3E%3Cpath stroke-opacity='0.62' d='M -15 86 C 68 118, 98 232, 44 370 C 14 445, 50 498, 120 530'/%3E%3Cpath stroke-opacity='0.76' d='M -15 114 C 55 145, 82 250, 30 385 C 2 455, 32 504, 92 530'/%3E%3Cpath stroke-opacity='0.88' d='M -15 142 C 42 172, 66 268, 16 400 C -8 465, 15 510, 64 530'/%3E%3Cpath stroke-opacity='0.96' d='M -15 170 C 28 198, 50 286, 2 415 C -16 472, 0 515, 36 530'/%3E%3Cpath stroke-opacity='0.78' d='M 165 530 C 128 480, 120 420, 156 370 C 190 324, 242 320, 290 340'/%3E%3Cpath stroke-opacity='0.64' d='M 192 530 C 156 485, 148 434, 180 388 C 210 348, 254 344, 290 362'/%3E%3Cpath stroke-opacity='0.48' d='M 218 530 C 184 492, 176 448, 204 406 C 230 370, 266 368, 290 384'/%3E%3Cpath stroke-opacity='0.34' d='M 244 530 C 212 498, 204 462, 228 424 C 250 394, 276 392, 290 406'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 280px 520px;
+  opacity: 0.92;
   pointer-events: none;
   z-index: 0;
 }
@@ -1931,10 +1964,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg,
-      var(--bg-dark) 0%,
-      rgba(11, 12, 16, 0.72) 45%,
-      var(--bg-dark) 100%);
+  background: linear-gradient(180deg, var(--bg-dark) 0%, transparent 18%);
 }
 
 .topbar-left-group {
@@ -2063,4 +2093,66 @@ body {
   .header-stats {
     grid-template-columns: 1fr;
   }
+}
+
+.leaflet-tooltip.choropleth-tooltip {
+  background-color: rgba(21, 22, 27, 0.96);
+  color: #f0f0f0;
+  border: 1px solid rgba(225, 44, 44, 0.5);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.leaflet-tooltip.choropleth-tooltip::before {
+  display: none;
+}
+
+[data-theme='light'] .leaflet-tooltip.choropleth-tooltip {
+  background-color: rgba(255, 255, 255, 0.96);
+  color: #15161b;
+  border-color: rgba(225, 44, 44, 0.45);
+}
+
+.choropleth-legend {
+  position: absolute;
+  bottom: 22px;
+  left: 18px;
+  z-index: 1000;
+  background-color: rgba(14, 15, 20, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #e2e5ec;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+
+[data-theme='light'] .choropleth-legend {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #15161b;
+}
+
+.choropleth-legend-bar {
+  width: 118px;
+  height: 11px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #e25563 0%, #b8202c 52%, #5c0a14 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.leaflet-interactive:focus {
+  outline: none;
 }
